@@ -1,0 +1,39 @@
+Sprint Planning Meeting — Platform Team
+Date: 2024-11-15
+Attendees: Sarah (PM), Jake (Tech Lead), Priya (Backend), Marcus (Frontend), Aisha (QA)
+
+---
+
+Sarah: Alright everyone, let's go through what we heard from customers this week and plan our next sprint. The biggest thing is the authentication overhaul. We've had three enterprise customers ask for SSO support in the last month.
+
+Jake: Yeah, we need to support SAML 2.0 and OpenID Connect at minimum. The current password-only auth is blocking deals. I'd suggest we start with SAML since that's what Acme Corp needs for their Q1 rollout.
+
+Priya: I can handle the backend for SAML. We'll need a new identity provider abstraction layer so we can plug in different providers without touching the core auth flow. I'm thinking we create an AuthProvider interface with authenticate(), refresh_token(), and validate_session() methods.
+
+Marcus: On the frontend side, we'll need a new login flow that detects whether the user's org uses SSO or password auth. I'm worried about the redirect handling — SAML has that browser redirect dance that can be tricky.
+
+Sarah: Let's also talk about the password reset issue. We've gotten 47 support tickets this month about password reset emails not arriving. That's our number one support burden right now.
+
+Jake: I looked into it. The problem is our email delivery service has a 15% failure rate for transactional emails. We're using a shared IP pool that's been flagged by some providers. We need to either get a dedicated IP or switch to a more reliable provider like SendGrid or Postmark.
+
+Priya: While we're touching auth, we should also add rate limiting to the login endpoint. I ran a load test last week and someone could theoretically brute-force passwords at 1000 attempts per second. No lockout, no CAPTCHA, nothing.
+
+Aisha: From a testing perspective, I need the SSO integration to have a sandbox mode. I can't test against real identity providers in CI. We need mock SAML responses that cover the happy path, expired assertions, and invalid signatures.
+
+Sarah: Good point. Let's also discuss the API rate limiting story. Three of our larger customers are hitting our 100 req/s global limit and getting 429s during their batch import windows. They've asked for either higher limits or a way to schedule batch operations.
+
+Jake: I think the right approach is tiered rate limits based on plan level. Free tier stays at 100 req/s, Pro gets 500, Enterprise gets 2000 with burst allowance. We can implement this with a token bucket algorithm in Redis.
+
+Marcus: Related to that — our dashboard currently shows no information about rate limit usage. Customers don't know they're close to the limit until they start getting errors. We need a rate limit dashboard widget showing current usage vs. limit, with alerts at 80% threshold.
+
+Priya: One more thing — we have a data export feature that's been broken for two weeks. The CSV export times out for any dataset over 10,000 rows. We need to move it to an async job queue with progress notifications.
+
+Sarah: That's a P1 bug, let's make sure it's in this sprint. What about the mobile responsiveness issues? I've seen several complaints about the settings page being unusable on phones.
+
+Marcus: Yeah, the settings page layout breaks completely on screens narrower than 768px. The form inputs overflow and buttons are unreachable. I can fix it with a responsive grid refactor — probably a two-day effort.
+
+Jake: Before we wrap up, I want to flag a technical debt item. Our database query for the main dashboard takes 4.2 seconds on average. It's doing five sequential queries that could be parallelized or combined into a materialized view. If we don't address it soon, it'll only get worse as data grows.
+
+Aisha: And I'd like to request we add end-to-end tests for the critical path: signup → create project → invite team member → create first item. We currently have unit tests but nothing that exercises the full flow. Two of our last three production incidents would have been caught by an e2e test.
+
+Sarah: Great input everyone. Let me summarize what I'm hearing as priorities: SSO/SAML support is the big feature, password reset reliability is the critical bug, rate limiting improvements for enterprise customers, and the CSV export fix as P1. Let's size these in the second half of the meeting.

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "PLAT-101",
+    "title": "Basic password authentication",
+    "description": "Users can sign up and log in with email and password. Includes password hashing with bcrypt and session management via JWT tokens.",
+    "status": "done",
+    "tags": ["auth", "security"]
+  },
+  {
+    "id": "PLAT-102",
+    "title": "Email notification service",
+    "description": "Send transactional emails for password reset, welcome emails, and team invitations using shared SMTP relay.",
+    "status": "done",
+    "tags": ["email", "notifications"]
+  },
+  {
+    "id": "PLAT-103",
+    "title": "API rate limiting - global 100 req/s",
+    "description": "Implement global rate limiting at 100 requests per second across all API endpoints using in-memory counter.",
+    "status": "done",
+    "tags": ["api", "rate-limiting", "performance"]
+  },
+  {
+    "id": "PLAT-104",
+    "title": "CSV data export",
+    "description": "Allow users to export their project data as CSV files. Synchronous implementation handles up to 5000 rows.",
+    "status": "done",
+    "tags": ["export", "data"]
+  },
+  {
+    "id": "PLAT-105",
+    "title": "User settings page",
+    "description": "Settings page for profile, notification preferences, and account management. Desktop-only layout.",
+    "status": "done",
+    "tags": ["frontend", "settings", "ui"]
+  },
+  {
+    "id": "PLAT-106",
+    "title": "Main dashboard with project overview",
+    "description": "Dashboard showing all user projects with key metrics. Uses sequential database queries for each widget.",
+    "status": "done",
+    "tags": ["dashboard", "frontend", "performance"]
+  },
+  {
+    "id": "PLAT-107",
+    "title": "Team member invitation flow",
+    "description": "Project owners can invite team members via email. Invited users receive a link to join the project.",
+    "status": "done",
+    "tags": ["teams", "collaboration"]
+  },
+  {
+    "id": "PLAT-108",
+    "title": "Unit test suite for auth module",
+    "description": "Comprehensive unit tests for authentication module covering login, signup, token refresh, and password validation.",
+    "status": "done",
+    "tags": ["testing", "auth"]
+  },
+  {
+    "id": "PLAT-109",
+    "title": "Investigate SSO options for enterprise",
+    "description": "Research spike: evaluate SAML 2.0 and OpenID Connect as SSO options for enterprise customers. Document trade-offs.",
+    "status": "in_progress",
+    "tags": ["auth", "enterprise", "sso"]
+  },
+  {
+    "id": "PLAT-110",
+    "title": "Redis caching layer for frequently accessed data",
+    "description": "Add Redis as a caching layer for user sessions and frequently accessed project metadata to reduce database load.",
+    "status": "in_progress",
+    "tags": ["performance", "caching", "infrastructure"]
+  }
+]

@@ -63,7 +63,20 @@ python main.py data/sample_transcript.txt --backlog data/sample_backlog.json
 python -m pytest tests/
 ```
 
-## Running the Demo
+## Streamlit UI
+
+```bash
+streamlit run app.py
+```
+
+Opens a web UI at http://localhost:8501 with:
+- Sidebar for transcript upload/paste (sample pre-filled) and backlog input
+- Live pipeline progress indicators for each agent step
+- Results in tabs: Stories, Pipeline Stats, Raw JSON, Audit Log
+- Error/warning banners for partial failures
+- Human review Approve/Reject buttons when triggered
+
+## Running the Demo (CLI)
 
 ```bash
 # Basic run with just a transcript
@@ -101,8 +114,9 @@ python -m pytest tests/ --cov-fail-under=65
 graph/          — LangGraph infrastructure (state, builder, routing, checkpointer)
 nodes/          — Node functions (parser, gap_detection, story_writer, llm_fallback, human_review, error)
 src/            — Agent implementations, tools, models, memory, observability
-tests/          — 110 tests across 6 test files
+tests/          — 119 tests across 7 test files
 data/           — Sample transcript and backlog for demo
+app.py          — Streamlit web UI
 main.py         — CLI entry point
 ```
 

@@ -218,10 +218,12 @@ backlog_synthesizer_langgraph/
 │   ├── test_parser_node.py            # 17 tests ✅
 │   ├── test_gap_detection_node.py     # 20 tests ✅
 │   ├── test_human_review_node.py      # 20 tests ✅
-│   └── test_full_pipeline.py          # 24 tests ✅ (e2e routing + graph structure)
+│   ├── test_full_pipeline.py          # 24 tests ✅ (e2e routing + graph structure)
+│   └── test_app.py                    # 9 tests ✅ (UI pipeline runner smoke tests)
 ├── data/
 │   ├── sample_transcript.txt          # Demo transcript for main.py
 │   └── sample_backlog.json            # Demo backlog tickets (10 items)
+├── app.py                        # Streamlit web UI ✅
 ├── main.py                       # CLI entry point ✅
 ├── pyproject.toml
 ├── .env.example
@@ -285,31 +287,41 @@ pip install -e ".[dev]"
 cp .env.example .env
 # Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
 
-# Run the pipeline
+# Run the pipeline (CLI)
 python main.py data/sample_transcript.txt --backlog data/sample_backlog.json
+
+# Run the Streamlit UI
+streamlit run app.py
 
 # Run tests with coverage
 python -m pytest tests/
-
-# Verify graph compiles
-python -c "import sys; sys.path.insert(0, '.'); from graph.builder import compile_graph; g = compile_graph(); print('OK')"
 ```
 
-# Run tests
-python -m pytest tests/ -v
+### Streamlit UI (`app.py`)
 
-# Verify no import errors
-python -c "import sys; sys.path.insert(0, '.'); from graph.builder import compile_graph; g = compile_graph(); print('OK')"
-```
+Launch: `streamlit run app.py` → opens at http://localhost:8501
 
-### Current Status: ✅ Full pipeline with complete graph wiring
+**What each tab shows:**
+- **Stories** — Epics with expandable stories showing user story text, acceptance criteria, tags, and refinement warnings
+- **Pipeline Stats** — Metrics (stories/epics/duplicates/conflicts/time) + per-agent breakdown table
+- **Raw JSON** — Complete StoryOutput as formatted JSON with download button
+- **Audit Log** — ReAct reasoning notes and error entries from each agent
+
+**How human review works in the UI:**
+- When the LLM fallback selects `request_review`, the pipeline pauses via `interrupt()`
+- The UI shows a blue "Human review required" banner with Approve/Reject buttons
+- On approve: pipeline resumes to gap_detection or story_writer
+- On reject: pipeline terminates with permanent_failure
+
+### Current Status: ✅ Full pipeline with Streamlit UI
 - All packages install cleanly
 - Graph compiles with 6 nodes: parser, gap_detection, story_writer, error_node, llm_fallback_node, human_review
 - LLM fallback routes back to pipeline nodes via graph edges (not internal calls)
 - Human review uses `interrupt()` for pause/resume with checkpointer persistence
 - Checkpointer enables session state persistence and replay
-- CLI entry point: `python main.py data/sample_transcript.txt [--backlog data/sample_backlog.json]`
-- **110 tests passing, 69% coverage** (threshold: 65%)
+- CLI: `python main.py data/sample_transcript.txt [--backlog data/sample_backlog.json]`
+- UI: `streamlit run app.py` (sample transcript pre-filled, run immediately)
+- **119 tests passing, 69% coverage** (threshold: 65%)
 - Pipeline runs end-to-end with sample data (requires valid `ANTHROPIC_API_KEY` for LLM calls)
 - Without API key: gracefully degrades through parser → llm_fallback → return_partial → END
 
@@ -318,7 +330,7 @@ python -c "import sys; sys.path.insert(0, '.'); from graph.builder import compil
 1. **Retries are graph cycles** — original used internal function calls; this uses graph edges so retries show up in the execution trace and checkpointer captures each step.
 2. **Human review pauses the graph** — original had no human-in-the-loop; this uses LangGraph's `interrupt()` which persists state and waits for external input.
 3. **Decision recording** — LLM fallback records `action` in `react_notes` for downstream routing instead of immediately executing the action.
-4. **No streaming yet** — original didn't have it either, but LangGraph supports it natively when needed.
+4. **Streamlit UI** — original was CLI-only; this adds a web interface with live progress and tabbed results.
 
 ---
 

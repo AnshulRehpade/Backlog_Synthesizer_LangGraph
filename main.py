@@ -113,24 +113,32 @@ def _load_backlog(filepath: Path) -> list[BacklogTicket]:
 
 
 async def run_pipeline(
-    transcript_path: str,
+    transcript_path: str | list[str],
     backlog_path: str | None = None,
 ) -> dict:
     """Run the full Backlog Synthesizer pipeline.
 
     Args:
-        transcript_path: Path to the transcript/document to process.
+        transcript_path: Path(s) to transcript/document(s) to process.
+            Can be a single path string or a list of paths for multi-document.
         backlog_path: Optional path to existing backlog tickets (JSON).
 
     Returns:
         Final pipeline state as a dict.
     """
-    # Load documents
-    doc_path = Path(transcript_path)
-    if not doc_path.exists():
-        raise FileNotFoundError(f"Document not found: {transcript_path}")
+    # Normalize to list for multi-document support
+    if isinstance(transcript_path, str):
+        paths = [transcript_path]
+    else:
+        paths = list(transcript_path)
 
-    document = _load_document(doc_path)
+    # Load all documents
+    documents = []
+    for p in paths:
+        doc_path = Path(p)
+        if not doc_path.exists():
+            raise FileNotFoundError(f"Document not found: {p}")
+        documents.append(_load_document(doc_path))
 
     # Load optional backlog
     backlog_tickets = []
@@ -145,7 +153,7 @@ async def run_pipeline(
 
     inputs = SessionInputs(
         session_id=session_id,
-        documents=[document],
+        documents=documents,
         backlog_tickets=backlog_tickets,
     )
 
@@ -182,7 +190,8 @@ async def main() -> None:
     )
     parser.add_argument(
         "transcript",
-        help="Path to transcript file (.txt, .md, .pdf)",
+        nargs="+",
+        help="Path(s) to transcript file(s) (.txt, .md, .pdf) — supports multiple",
     )
     parser.add_argument(
         "--backlog",

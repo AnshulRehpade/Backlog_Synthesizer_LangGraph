@@ -255,14 +255,22 @@ with st.sidebar:
     transcript_filename = "transcript.txt"
 
     with transcript_tab1:
-        uploaded_file = st.file_uploader(
-            "Upload transcript",
+        uploaded_files = st.file_uploader(
+            "Upload transcript(s)",
             type=["txt", "md", "pdf"],
             key="transcript_upload",
+            accept_multiple_files=True,
         )
-        if uploaded_file is not None:
-            transcript_text = uploaded_file.read().decode("utf-8", errors="replace")
-            transcript_filename = uploaded_file.name
+        if uploaded_files:
+            parts = []
+            names = []
+            for f in uploaded_files:
+                parts.append(f.read().decode("utf-8", errors="replace"))
+                names.append(f.name)
+            transcript_text = "\n\n---\n\n".join(parts)
+            transcript_filename = ", ".join(names)
+            if len(uploaded_files) > 1:
+                st.caption(f"{len(uploaded_files)} files loaded")
 
     with transcript_tab2:
         sample_text = _load_sample_transcript()
@@ -301,6 +309,32 @@ with st.sidebar:
         if use_sample and not backlog_tickets:
             backlog_tickets = _load_sample_backlog()
             st.info(f"{len(backlog_tickets)} sample tickets loaded")
+
+    st.divider()
+
+    # Threshold tuning
+    st.subheader("Thresholds")
+    dup_threshold = st.slider(
+        "Duplicate threshold",
+        min_value=0.50,
+        max_value=0.95,
+        value=0.80,
+        step=0.05,
+        help="Similarity score at or above which items are flagged as duplicates",
+    )
+    conflict_threshold = st.slider(
+        "Conflict threshold",
+        min_value=0.30,
+        max_value=0.75,
+        value=0.50,
+        step=0.05,
+        help="Similarity score at or above which items are flagged as conflicts",
+    )
+
+    # Apply thresholds via env vars so PipelineConfig.from_env() picks them up
+    import os
+    os.environ["GAP_DETECTION_DUPLICATE_THRESHOLD"] = str(dup_threshold)
+    os.environ["GAP_DETECTION_CONFLICT_THRESHOLD"] = str(conflict_threshold)
 
     st.divider()
 
@@ -581,15 +615,45 @@ if "result" in st.session_state and st.session_state["result"] is not None:
 
             st.table(agents_data)
 
-        # Tab 3 — Raw JSON
+        # Tab 3 — Export & Raw JSON
         with tab_json:
+            from backlog_synthesizer_langgraph.tools.exporters import (
+                export_github_markdown,
+                export_jira_csv,
+            )
+
+            st.subheader("Export Formats")
+            exp1, exp2, exp3 = st.columns(3)
+
+            # JSON download
             output_json = story_output.model_dump_json(indent=2)
-            st.download_button(
-                "📥 Download JSON",
+            exp1.download_button(
+                "📥 JSON",
                 data=output_json,
                 file_name="story_output.json",
                 mime="application/json",
             )
+
+            # JIRA CSV download
+            jira_csv = export_jira_csv(story_output)
+            exp2.download_button(
+                "📥 JIRA CSV",
+                data=jira_csv,
+                file_name="stories_jira.csv",
+                mime="text/csv",
+            )
+
+            # GitHub Markdown download
+            gh_md = export_github_markdown(story_output)
+            exp3.download_button(
+                "📥 GitHub MD",
+                data=gh_md,
+                file_name="stories_github.md",
+                mime="text/markdown",
+            )
+
+            st.divider()
+            st.subheader("Raw JSON")
             st.json(json.loads(output_json))
 
         # Tab 4 — Audit Log

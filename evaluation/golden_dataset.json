@@ -1,0 +1,62 @@
+[
+  {
+    "id": "eval-001",
+    "description": "Sprint planning meeting with auth and API features",
+    "transcript": "Jake: We need SSO support with SAML 2.0 for enterprise customers. Sarah: The password reset emails have a 15% failure rate - we need to switch to SendGrid. Priya: Add rate limiting to the login endpoint to prevent brute force.",
+    "existing_backlog": [
+      {"id": "T-1", "title": "Basic password authentication", "description": "Login with email and password", "status": "done", "tags": ["auth"]}
+    ],
+    "expected_stories_count": 3,
+    "expected_duplicates": 0,
+    "expected_conflicts": 0,
+    "tags": ["auth", "email", "security"]
+  },
+  {
+    "id": "eval-002",
+    "description": "All items match existing backlog (duplicate detection)",
+    "transcript": "We need to implement password authentication with email. Also need to set up basic rate limiting at 100 requests per second.",
+    "existing_backlog": [
+      {"id": "T-1", "title": "Basic password authentication", "description": "Users can sign up and log in with email and password", "status": "done", "tags": ["auth"]},
+      {"id": "T-2", "title": "API rate limiting - global 100 req/s", "description": "Global rate limiting at 100 requests per second", "status": "done", "tags": ["api", "rate-limiting"]}
+    ],
+    "expected_stories_count": 0,
+    "expected_duplicates": 2,
+    "expected_conflicts": 0,
+    "tags": ["auth", "api"]
+  },
+  {
+    "id": "eval-003",
+    "description": "Mixed new and conflicting items",
+    "transcript": "We should use OAuth2 instead of JWT for authentication. Also we need a new data export feature that handles CSV files up to 1M rows asynchronously.",
+    "existing_backlog": [
+      {"id": "T-1", "title": "JWT-based session management", "description": "Use JWT tokens for session management", "status": "done", "tags": ["auth"]},
+      {"id": "T-2", "title": "CSV data export", "description": "Synchronous CSV export up to 5000 rows", "status": "done", "tags": ["export"]}
+    ],
+    "expected_stories_count": 2,
+    "expected_duplicates": 0,
+    "expected_conflicts": 2,
+    "tags": ["auth", "export"]
+  },
+  {
+    "id": "eval-004",
+    "description": "Frontend and mobile responsiveness",
+    "transcript": "Marcus: The settings page breaks on mobile - form inputs overflow on screens narrower than 768px. We also need a dashboard widget showing rate limit usage with alerts at 80% threshold.",
+    "existing_backlog": [],
+    "expected_stories_count": 2,
+    "expected_duplicates": 0,
+    "expected_conflicts": 0,
+    "tags": ["frontend", "mobile", "dashboard"]
+  },
+  {
+    "id": "eval-005",
+    "description": "Technical debt and performance",
+    "transcript": "The main dashboard query takes 4.2 seconds on average. It does five sequential queries that should be parallelized. We also need to move the CSV export to an async job queue with progress notifications.",
+    "existing_backlog": [
+      {"id": "T-1", "title": "Main dashboard with project overview", "description": "Dashboard showing projects with sequential queries", "status": "done", "tags": ["dashboard", "performance"]}
+    ],
+    "expected_stories_count": 2,
+    "expected_duplicates": 0,
+    "expected_conflicts": 1,
+    "tags": ["performance", "export", "dashboard"]
+  }
+]

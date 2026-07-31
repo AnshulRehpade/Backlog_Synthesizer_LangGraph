@@ -72,6 +72,37 @@ class AnthropicGenerationTool:
             PermanentToolError: For non-retryable failures.
             ToolError: For any other unexpected errors.
         """
+        text, _ = self._call_api(prompt, system_prompt)
+        return text
+
+    def generate_with_usage(
+        self, prompt: str, system_prompt: str | None = None
+    ) -> tuple[str, dict]:
+        """Generate text using Claude and return token usage.
+
+        Args:
+            prompt: The user prompt to send to the LLM.
+            system_prompt: Optional system prompt for context/instruction.
+
+        Returns:
+            Tuple of (generated_text, usage_dict) where usage_dict contains
+            'input_tokens' and 'output_tokens' keys.
+
+        Raises:
+            TransientToolError: For retryable failures.
+            PermanentToolError: For non-retryable failures.
+            ToolError: For any other unexpected errors.
+        """
+        return self._call_api(prompt, system_prompt)
+
+    def _call_api(
+        self, prompt: str, system_prompt: str | None = None
+    ) -> tuple[str, dict]:
+        """Internal: call the Anthropic API and return (text, usage).
+
+        Returns:
+            Tuple of (response_text, {"input_tokens": int, "output_tokens": int}).
+        """
         kwargs: dict = {
             "model": self._model,
             "max_tokens": self._max_tokens,
@@ -91,7 +122,14 @@ class AnthropicGenerationTool:
             content = "".join(text_parts)
             if not content:
                 raise ToolError("LLM returned empty content in response.")
-            return content
+
+            # Extract token usage from response
+            usage = {
+                "input_tokens": getattr(response.usage, "input_tokens", 0),
+                "output_tokens": getattr(response.usage, "output_tokens", 0),
+            }
+
+            return content, usage
 
         except anthropic.AuthenticationError as e:
             raise PermanentToolError(

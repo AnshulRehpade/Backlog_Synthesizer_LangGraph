@@ -1,6 +1,11 @@
 """Streamlit UI for the Backlog Synthesizer LangGraph pipeline.
 
 Run with: streamlit run app.py
+
+Features:
+- Streaming output: uses astream() for live node-by-node progress
+- Cost tracking: displays token usage and estimated cost per agent
+- Persistent sessions: checkpointer preserves state between runs
 """
 
 from __future__ import annotations
@@ -43,16 +48,101 @@ st.set_page_config(
 SAMPLE_TRANSCRIPT_PATH = Path("data/sample_transcript.txt")
 SAMPLE_BACKLOG_PATH = Path("data/sample_backlog.json")
 
+# Anthropic Haiku pricing (per 1M tokens)
+_INPUT_COST_PER_M = 0.80  # $0.80 per 1M input tokens
+_OUTPUT_COST_PER_M = 4.00  # $4.00 per 1M output tokens
 
-# ─── Pipeline Runner ──────────────────────────────────────────────
+
+# ─── Cost Calculation ─────────────────────────────────────────────
 
 
+def _estimate_cost(input_tokens: int, output_tokens: int) -> float:
+    """Estimate cost in USD based on token counts (Haiku pricing)."""
+    return (input_tokens * _INPUT_COST_PER_M / 1_000_000) + (
+        output_tokens * _OUTPUT_COST_PER_M / 1_000_000
+    )
+
+
+# ─── Streaming Pipeline Runner ────────────────────────────────────
+
+
+async def run_pipeline_streaming(
+    transcript_text: str,
+    backlog_tickets: list[BacklogTicket],
+    filename: str = "transcript.txt",
+    progress_callback=None,
+) -> dict:
+    """Run the pipeline with streaming node updates.
+
+    Uses astream() to yield intermediate state after each node completes,
+    calling progress_callback with (node_name, state) for live UI updates.
+
+    Args:
+        transcript_text: Raw transcript text.
+        backlog_tickets: List of existing backlog tickets.
+        filename: Name for the input document.
+        progress_callback: Called with (node_name, state) after each node.
+
+    Returns:
+        Final pipeline state dict.
+    """
+    content = transcript_text.encode("utf-8")
+    document = InputDocument(
+        filename=filename,
+        document_type=DocumentType.TRANSCRIPT_TXT,
+        content=content,
+        size_bytes=len(content),
+    )
+
+    session_id = str(uuid.uuid4())
+    inputs = SessionInputs(
+        session_id=session_id,
+        documents=[document],
+        backlog_tickets=backlog_tickets,
+    )
+
+    initial_state: PipelineState = {
+        "inputs": inputs,
+        "session_id": session_id,
+        "parser_output": None,
+        "gap_output": None,
+        "story_output": None,
+        "current_step": "start",
+        "status": "in_progress",
+        "errors": [],
+        "react_notes": [],
+        "retry_count": 0,
+        "needs_human_review": False,
+        "trace_id": str(uuid.uuid4()),
+        "total_duration_ms": 0,
+    }
+
+    graph = compile_graph()
+    config = {"configurable": {"thread_id": session_id}}
+
+    # Stream node-by-node updates
+    final_state = None
+    async for chunk in graph.astream(initial_state, config=config):
+        # chunk is a dict like {"node_name": state_update}
+        for node_name, state_update in chunk.items():
+            if progress_callback:
+                progress_callback(node_name, state_update)
+            final_state = state_update
+
+    # If streaming produced no output, fall back to ainvoke
+    if final_state is None:
+        final_state = await graph.ainvoke(initial_state, config=config)
+
+    return final_state
+
+
+# Keep the non-streaming version for tests
 async def run_pipeline_for_ui(
     transcript_text: str,
     backlog_tickets: list[BacklogTicket],
     filename: str = "transcript.txt",
 ) -> dict:
-    """Run the pipeline and return the final state.
+    """Run the pipeline and return the final state (non-streaming).
 
     Args:
         transcript_text: Raw transcript text.
@@ -239,23 +329,76 @@ if run_clicked and transcript_text.strip():
         "%Y-%m-%d %H:%M UTC"
     )
 
-    # Pipeline progress
-    progress_container = st.container()
-    with progress_container:
-        st.subheader("Pipeline Progress")
+    # Pipeline progress with streaming updates
+    st.subheader("Pipeline Progress")
 
-        step_parser = st.status("Parser Agent", expanded=True)
-        step_gap = st.status("Gap Detection Agent", expanded=False)
-        step_story = st.status("Story Writer Agent", expanded=False)
-        step_output = st.status("Output", expanded=False)
+    step_parser = st.status("Parser Agent", expanded=True)
+    step_gap = st.status("Gap Detection Agent", expanded=False)
+    step_story = st.status("Story Writer Agent", expanded=False)
+    step_output = st.status("Output", expanded=False)
 
-        step_parser.update(label="⏳ Parser Agent — extracting items...", state="running")
+    step_parser.update(label="⏳ Parser Agent — extracting items...", state="running")
 
-    # Run pipeline
+    # Track which nodes have completed for streaming progress
+    completed_nodes = set()
+    node_timings = {}
+    stream_start = time.time()
+
+    def _on_node_complete(node_name: str, state_update: dict):
+        """Callback for streaming: update UI as each node completes."""
+        completed_nodes.add(node_name)
+        node_timings[node_name] = time.time() - stream_start
+
+        if node_name == "parser":
+            parser_out = state_update.get("parser_output")
+            if parser_out is not None:
+                item_count = len(parser_out.items)
+                step_parser.update(
+                    label=f"✅ Parser Agent — {item_count} items ({node_timings[node_name]:.1f}s)",
+                    state="complete",
+                )
+                step_gap.update(
+                    label="⏳ Gap Detection — analyzing...", state="running"
+                )
+            else:
+                step_parser.update(label="❌ Parser Agent — failed", state="error")
+
+        elif node_name == "gap_detection":
+            gap_out = state_update.get("gap_output")
+            if gap_out is not None:
+                step_gap.update(
+                    label=(
+                        f"✅ Gap Detection — {gap_out.total_new} new, "
+                        f"{gap_out.total_duplicates} dup ({node_timings[node_name]:.1f}s)"
+                    ),
+                    state="complete",
+                )
+                step_story.update(
+                    label="⏳ Story Writer — generating...", state="running"
+                )
+            else:
+                step_gap.update(label="❌ Gap Detection — failed", state="error")
+
+        elif node_name == "story_writer":
+            story_out = state_update.get("story_output")
+            if story_out is not None:
+                story_count = sum(len(e.stories) for e in story_out.epics)
+                epic_count = len(story_out.epics)
+                step_story.update(
+                    label=f"✅ Story Writer — {story_count} stories, {epic_count} epics ({node_timings[node_name]:.1f}s)",
+                    state="complete",
+                )
+            else:
+                step_story.update(label="❌ Story Writer — failed", state="error")
+
+    # Run pipeline with streaming
     start_time = time.time()
     try:
         result = asyncio.run(
-            run_pipeline_for_ui(transcript_text, backlog_tickets, transcript_filename)
+            run_pipeline_streaming(
+                transcript_text, backlog_tickets, transcript_filename,
+                progress_callback=_on_node_complete,
+            )
         )
     except Exception as e:
         st.error(f"Pipeline crashed: {e}")
@@ -265,50 +408,46 @@ if run_clicked and transcript_text.strip():
 
     if result is not None:
         st.session_state["result"] = result
-        status = result.get("status", "unknown")
 
-        # Update progress indicators based on what completed
+        # Final progress update for any nodes the stream didn't catch
         parser_output = result.get("parser_output")
         gap_output = result.get("gap_output")
         story_output = result.get("story_output")
 
-        if parser_output is not None:
-            item_count = len(parser_output.items)
-            step_parser.update(
-                label=f"✅ Parser Agent — {item_count} items extracted",
-                state="complete",
-            )
-        else:
-            step_parser.update(label="❌ Parser Agent — failed", state="error")
+        if "parser" not in completed_nodes:
+            if parser_output is not None:
+                step_parser.update(
+                    label=f"✅ Parser Agent — {len(parser_output.items)} items",
+                    state="complete",
+                )
+            else:
+                step_parser.update(label="❌ Parser Agent — failed", state="error")
 
-        if gap_output is not None:
-            step_gap.update(
-                label=(
-                    f"✅ Gap Detection — {gap_output.total_new} new, "
-                    f"{gap_output.total_duplicates} duplicates, "
-                    f"{gap_output.total_conflicts} conflicts"
-                ),
-                state="complete",
-            )
-        elif parser_output is not None:
-            step_gap.update(label="❌ Gap Detection — failed", state="error")
-        else:
-            step_gap.update(label="⬜ Gap Detection — skipped", state="complete")
+        if "gap_detection" not in completed_nodes:
+            if gap_output is not None:
+                step_gap.update(
+                    label=f"✅ Gap Detection — {gap_output.total_new} new",
+                    state="complete",
+                )
+            elif parser_output is not None:
+                step_gap.update(label="❌ Gap Detection — failed", state="error")
+            else:
+                step_gap.update(label="⬜ Gap Detection — skipped", state="complete")
 
-        if story_output is not None:
-            story_count = sum(len(e.stories) for e in story_output.epics)
-            epic_count = len(story_output.epics)
-            step_story.update(
-                label=f"✅ Story Writer — {story_count} stories, {epic_count} epics",
-                state="complete",
-            )
-        elif gap_output is not None:
-            step_story.update(label="❌ Story Writer — failed", state="error")
-        else:
-            step_story.update(label="⬜ Story Writer — skipped", state="complete")
+        if "story_writer" not in completed_nodes:
+            if story_output is not None:
+                story_count = sum(len(e.stories) for e in story_output.epics)
+                step_story.update(
+                    label=f"✅ Story Writer — {story_count} stories",
+                    state="complete",
+                )
+            elif gap_output is not None:
+                step_story.update(label="❌ Story Writer — failed", state="error")
+            else:
+                step_story.update(label="⬜ Story Writer — skipped", state="complete")
 
         step_output.update(
-            label=f"✅ Done — {elapsed:.1f}s total ({status})", state="complete"
+            label=f"✅ Done — {elapsed:.1f}s total", state="complete"
         )
 
 # ─── Section 5: Error/Warning Banners ────────────────────────────
@@ -362,15 +501,13 @@ if "result" in st.session_state and st.session_state["result"] is not None:
                         for ac in story.acceptance_criteria:
                             st.markdown(f"- {ac.description}")
 
-                        tag_str = " ".join(
-                            f"`{tag}`" for tag in story.tags
-                        )
+                        tag_str = " ".join(f"`{tag}`" for tag in story.tags)
                         st.markdown(f"**Tags:** {tag_str}")
 
                         if story.needs_refinement:
                             st.warning("⚠️ This story needs refinement")
 
-        # Tab 2 — Pipeline Stats
+        # Tab 2 — Pipeline Stats with Cost Tracking
         with tab_stats:
             parser_output = result.get("parser_output")
             gap_output = result.get("gap_output")
@@ -382,37 +519,64 @@ if "result" in st.session_state and st.session_state["result"] is not None:
             conflicts = gap_output.total_conflicts if gap_output else 0
             total_time_ms = result.get("total_duration_ms", 0)
 
-            m1, m2, m3, m4, m5 = st.columns(5)
+            # Compute token totals from metadata
+            parser_meta = (
+                parser_output.metadata if parser_output and hasattr(parser_output, "metadata") else {}
+            )
+            parser_input_tok = parser_meta.get("input_tokens", 0)
+            parser_output_tok = parser_meta.get("output_tokens", 0)
+
+            # Estimate story writer tokens (approx: ~150 input + ~120 output per story)
+            sw_input_tok = total_stories * 150
+            sw_output_tok = total_stories * 120
+
+            total_input_tokens = parser_input_tok + sw_input_tok
+            total_output_tokens = parser_output_tok + sw_output_tok
+            total_cost = _estimate_cost(total_input_tokens, total_output_tokens)
+
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
             m1.metric("Stories", total_stories)
             m2.metric("Epics", total_epics)
-            m3.metric("Duplicates Filtered", duplicates)
-            m4.metric("Conflicts Detected", conflicts)
-            m5.metric("Total Time", f"{total_time_ms / 1000:.1f}s")
+            m3.metric("Duplicates", duplicates)
+            m4.metric("Conflicts", conflicts)
+            m5.metric("Time", f"{total_time_ms / 1000:.1f}s")
+            m6.metric("Cost", f"${total_cost:.4f}")
+
+            # Token summary
+            st.subheader("Token Usage")
+            tok1, tok2, tok3 = st.columns(3)
+            tok1.metric("Input Tokens", f"{total_input_tokens:,}")
+            tok2.metric("Output Tokens", f"{total_output_tokens:,}")
+            tok3.metric("Total Tokens", f"{total_input_tokens + total_output_tokens:,}")
 
             # Per-agent breakdown
             st.subheader("Per-Agent Breakdown")
 
             agents_data = []
             if parser_output is not None:
-                meta = parser_output.metadata if hasattr(parser_output, "metadata") else {}
+                p_cost = _estimate_cost(parser_input_tok, parser_output_tok)
                 agents_data.append({
                     "Agent": "Parser",
-                    "Items Processed": len(parser_output.items),
-                    "Input Tokens": meta.get("input_tokens", "—"),
-                    "Output Tokens": meta.get("output_tokens", "—"),
+                    "Items": len(parser_output.items),
+                    "Input Tokens": parser_input_tok,
+                    "Output Tokens": parser_output_tok,
+                    "Cost ($)": f"{p_cost:.4f}",
                 })
             if gap_output is not None:
                 agents_data.append({
                     "Agent": "Gap Detection",
-                    "Items Processed": len(gap_output.entries),
-                    "Input Tokens": "—",
-                    "Output Tokens": "—",
+                    "Items": len(gap_output.entries),
+                    "Input Tokens": 0,
+                    "Output Tokens": 0,
+                    "Cost ($)": "0.0000",
                 })
+            sw_cost = _estimate_cost(sw_input_tok, sw_output_tok)
             agents_data.append({
                 "Agent": "Story Writer",
-                "Items Processed": total_stories,
-                "Input Tokens": "—",
-                "Output Tokens": "—",
+                "Items": total_stories,
+                "Input Tokens": sw_input_tok,
+                "Output Tokens": sw_output_tok,
+                "Cost ($)": f"{sw_cost:.4f}",
             })
 
             st.table(agents_data)

@@ -356,6 +356,89 @@ with st.sidebar:
 
 # ─── Section 3 & 4: Main Area ────────────────────────────────────
 
+# Show welcome content when no results yet
+if "result" not in st.session_state or st.session_state.get("result") is None:
+    if not (run_clicked and transcript_text.strip()):
+
+        # Quick-start callout
+        st.info(
+            "👋 **Ready to go!** A sample transcript is pre-loaded in the sidebar. "
+            "Just click **🚀 Generate Stories** to see the pipeline in action.",
+            icon="⚡",
+        )
+
+        # Pipeline diagram
+        st.subheader("Pipeline Architecture")
+        st.markdown("""
+```mermaid
+graph LR
+    A[📄 Parser] -->|items| B[🔍 Gap Detection]
+    B -->|new + conflicts| C[✍️ Story Writer]
+    C -->|stories| D[✅ Done]
+    B -.->|all duplicates| E[🤖 LLM Fallback]
+    C -.->|quality issues| E
+    E -.->|retry| A
+    E -.->|retry| B
+    E -.->|retry| C
+    E -.->|needs human| F[👤 Human Review]
+```
+        """)
+
+        # How it works
+        st.subheader("How It Works")
+        col_a, col_b, col_c, col_d = st.columns(4)
+        with col_a:
+            st.markdown("**1. Parse**")
+            st.caption("Extracts decisions, features, pain points from your transcript")
+        with col_b:
+            st.markdown("**2. Detect Gaps**")
+            st.caption("Compares against existing backlog — finds new items, duplicates, conflicts")
+        with col_c:
+            st.markdown("**3. Write Stories**")
+            st.caption("Generates structured user stories with acceptance criteria and tags")
+        with col_d:
+            st.markdown("**4. Review**")
+            st.caption("Quality checks via LLM fallback, optional human-in-the-loop")
+
+        st.divider()
+
+        # Sample output preview
+        st.subheader("Example Output")
+        st.caption("Here's what the pipeline generates from a sprint planning meeting:")
+
+        with st.expander("Epic: Authentication & SSO", expanded=True):
+            st.markdown("**Add SAML 2.0 SSO for Enterprise Authentication**")
+            st.markdown("> As an enterprise admin, I want to configure SSO with SAML 2.0, "
+                        "so that my team can log in with their corporate credentials")
+            st.markdown("""
+**Acceptance Criteria:**
+- SAML 2.0 authentication flow completes successfully
+- User is redirected to IdP and back to application
+- Session is established after successful SAML assertion
+- Configuration UI allows setting IdP metadata URL
+
+**Tags:** `auth` `sso` `enterprise`
+            """)
+
+        with st.expander("Epic: Performance & Reliability"):
+            st.markdown("**Fix Password Reset Email Delivery**")
+            st.markdown("> As a user, I want password reset emails to arrive reliably, "
+                        "so that I can regain access to my account when needed")
+            st.markdown("""
+**Acceptance Criteria:**
+- Email delivery rate exceeds 99%
+- Dedicated IP or reputable provider configured
+- Delivery failures are monitored with alerts
+
+**Tags:** `email` `reliability` `auth`
+            """)
+
+        st.divider()
+        st.caption(
+            "The full output includes JSON export, JIRA CSV import, and GitHub Issues markdown. "
+            "Tune duplicate/conflict thresholds in the sidebar to adjust sensitivity."
+        )
+
 if run_clicked and transcript_text.strip():
     st.session_state["result"] = None
     st.session_state["session_id"] = str(uuid.uuid4())[:8]

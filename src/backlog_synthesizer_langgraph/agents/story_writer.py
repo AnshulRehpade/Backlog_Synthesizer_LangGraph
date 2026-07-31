@@ -328,6 +328,20 @@ class StoryWriterAgent:
         # Build prompt and call LLM
         prompt = _build_prompt(item)
 
+        # Inject conflict context if this is a CONFLICT entry
+        if entry.classification == "conflict" and entry.conflict_info is not None:
+            conflict_section = (
+                "\n\n## Conflict Context:\n"
+                f"This item CONFLICTS with existing ticket '{entry.conflict_info.item_b_ticket_id}'.\n"
+                f"Similarity score: {entry.conflict_info.similarity_score:.2f}\n"
+                f"What changed: {entry.conflict_info.contradiction_description}\n\n"
+                "The user story should clearly describe what is DIFFERENT from the "
+                "existing ticket. Frame it as an update, migration, or replacement. "
+                "Include acceptance criteria that validate the new approach works "
+                "AND that the old behavior is properly deprecated or migrated.\n"
+            )
+            prompt = conflict_section + prompt
+
         # Inject few-shot examples if available
         if self._few_shot_store is not None:
             try:

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "ex-auth-sso",
+    "transcript": "We need to support SSO with SAML 2.0 for enterprise customers who require single sign-on",
+    "story_json": "{\"title\": \"Add SAML 2.0 SSO for Enterprise Authentication\", \"user_story\": \"As an enterprise admin, I want to configure SSO with SAML 2.0, so that my team can log in with their corporate credentials\", \"acceptance_criteria\": [{\"description\": \"SAML 2.0 authentication flow completes successfully\"}, {\"description\": \"User is redirected to IdP and back to application\"}, {\"description\": \"Session is established after successful SAML assertion\"}, {\"description\": \"Configuration UI allows setting IdP metadata URL\"}], \"tags\": [\"auth\", \"sso\", \"enterprise\"]}",
+    "description": "Enterprise SSO feature request",
+    "tags": ["auth", "sso"]
+  },
+  {
+    "id": "ex-perf-query",
+    "transcript": "The dashboard query takes 4 seconds because it runs 5 sequential database queries that should be parallelized",
+    "story_json": "{\"title\": \"Optimize Dashboard Query Performance\", \"user_story\": \"As a user, I want the dashboard to load in under 1 second, so that I can quickly see my project status\", \"acceptance_criteria\": [{\"description\": \"Dashboard load time is reduced from 4.2s to under 1s\"}, {\"description\": \"Sequential queries are replaced with parallel execution\"}, {\"description\": \"Query results are cached with appropriate TTL\"}, {\"description\": \"No regression in data accuracy\"}], \"tags\": [\"performance\", \"dashboard\", \"database\"]}",
+    "description": "Performance optimization for slow dashboard",
+    "tags": ["performance", "database"]
+  },
+  {
+    "id": "ex-bug-email",
+    "transcript": "Password reset emails have a 15% failure rate because we are using a shared IP pool that is flagged by providers",
+    "story_json": "{\"title\": \"Fix Password Reset Email Delivery Reliability\", \"user_story\": \"As a user, I want password reset emails to arrive reliably, so that I can regain access to my account when needed\", \"acceptance_criteria\": [{\"description\": \"Email delivery rate exceeds 99%\"}, {\"description\": \"Dedicated IP or reputable provider (SendGrid/Postmark) is configured\"}, {\"description\": \"Delivery failures are monitored with alerts\"}, {\"description\": \"Fallback delivery mechanism exists for critical emails\"}], \"tags\": [\"email\", \"reliability\", \"auth\"]}",
+    "description": "Email delivery reliability bug",
+    "tags": ["email", "reliability"]
+  },
+  {
+    "id": "ex-feat-export",
+    "transcript": "The CSV export times out for datasets over 10000 rows and needs to be moved to an async job queue with progress notifications",
+    "story_json": "{\"title\": \"Async CSV Export with Progress Notifications\", \"user_story\": \"As a user, I want to export large datasets without timeouts, so that I can get my data regardless of size\", \"acceptance_criteria\": [{\"description\": \"Export handles datasets of 1M+ rows without timeout\"}, {\"description\": \"User sees progress percentage during export\"}, {\"description\": \"Notification sent when export is complete\"}, {\"description\": \"Download link is available for 24 hours after completion\"}], \"tags\": [\"export\", \"async\", \"data\"]}",
+    "description": "Async export for large datasets",
+    "tags": ["export", "async"]
+  },
+  {
+    "id": "ex-feat-ratelimit",
+    "transcript": "Implement tiered rate limits based on plan level with token bucket algorithm in Redis - free 100, pro 500, enterprise 2000",
+    "story_json": "{\"title\": \"Tiered API Rate Limiting by Plan Level\", \"user_story\": \"As an API consumer, I want rate limits that match my subscription tier, so that I can perform batch operations without hitting limits\", \"acceptance_criteria\": [{\"description\": \"Free tier limited to 100 req/s\"}, {\"description\": \"Pro tier limited to 500 req/s\"}, {\"description\": \"Enterprise tier limited to 2000 req/s with burst\"}, {\"description\": \"Token bucket algorithm implemented in Redis\"}, {\"description\": \"429 responses include Retry-After header\"}], \"tags\": [\"api\", \"rate-limiting\", \"redis\"]}",
+    "description": "Tiered rate limiting feature",
+    "tags": ["api", "rate-limiting"]
+  }
+]

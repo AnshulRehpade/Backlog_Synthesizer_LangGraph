@@ -12,9 +12,11 @@ Never raises exceptions — always returns state gracefully.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.agents.story_writer import StoryWriterAgent
@@ -26,6 +28,42 @@ from backlog_synthesizer_langgraph.tools.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+_FEW_SHOT_EXAMPLES_PATH = Path("data/few_shot_examples.json")
+
+
+def _get_few_shot_store(config: PipelineConfig):
+    """Create a FewShotStore if few-shot is enabled and examples exist.
+
+    Returns None if disabled or if loading fails (non-fatal).
+    """
+    if not config.few_shot_enabled:
+        return None
+
+    if not _FEW_SHOT_EXAMPLES_PATH.exists():
+        return None
+
+    try:
+        from backlog_synthesizer_langgraph.tools.few_shot_store import FewShotStore
+
+        embedding_tool = config.create_embedding_tool()
+        vector_search_tool = config.create_vector_search_tool()
+
+        store = FewShotStore(
+            embedding_tool=embedding_tool,
+            vector_search_tool=vector_search_tool,
+            collection_prefix="few_shot_",
+        )
+
+        data = json.loads(_FEW_SHOT_EXAMPLES_PATH.read_text(encoding="utf-8"))
+        loaded = store.load_from_json(data)
+        if loaded > 0:
+            logger.info("Loaded %d few-shot examples for story generation", loaded)
+            return store
+    except Exception as e:
+        logger.warning("Failed to initialize few-shot store: %s", e)
+
+    return None
 
 
 async def story_writer_node(state: PipelineState) -> PipelineState:
@@ -150,7 +188,7 @@ async def _execute_story_writer(
             "total_duration_ms": state.get("total_duration_ms", 0) + duration_ms,
         }
 
-    agent = StoryWriterAgent(llm_tool=llm_tool)
+    agent = StoryWriterAgent(llm_tool=llm_tool, few_shot_store=_get_few_shot_store(config))
 
     # 3. Generate stories from gap report entries
     try:
@@ -244,7 +282,7 @@ async def _execute_story_writer(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
     else:
-        status = state.get("status", "in_progress")
+        status = "completed"
 
     # 9. Build react note for observability
     react_notes = []

@@ -135,10 +135,23 @@ async def _execute_gap_detection(
         }
 
     extracted_items = parser_output.items
+
+    # 1b. Confidence-based filtering — remove noise before gap detection
+    confidence_threshold = 0.3
+    filtered_items = [item for item in extracted_items if item.confidence >= confidence_threshold]
+    filtered_out = len(extracted_items) - len(filtered_items)
+    if filtered_out > 0:
+        logger.info(
+            "Confidence filter: removed %d/%d items below %.2f threshold",
+            filtered_out, len(extracted_items), confidence_threshold,
+        )
+    extracted_items = filtered_items
     items_count = len(extracted_items)
 
     if span is not None:
         span.set_attribute("items_processed", items_count)
+        if filtered_out > 0:
+            span.set_attribute("items_filtered_low_confidence", filtered_out)
 
     # 2. Initialize tools via PipelineConfig
     try:

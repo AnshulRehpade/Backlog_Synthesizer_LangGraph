@@ -2,6 +2,8 @@
 
 A multi-agent pipeline that reads meeting transcripts and architecture documents, compares extracted items against an existing backlog, and produces structured user stories grouped into epics.
 
+> **Reviewers:** see [DESIGN_NOTES.md](DESIGN_NOTES.md) for who it's for, the key design decision and its tradeoff, and how it's tested and evaluated.
+
 This is a **LangGraph migration** of the [original Backlog Synthesizer](https://github.com/AnshulRehpade/backlog-synthesizer). The hand-rolled orchestrator has been replaced with LangGraph's `StateGraph`, gaining built-in checkpointing, conditional routing, time-travel debugging, and human-in-the-loop support.
 
 ## Graph Topology
@@ -46,7 +48,7 @@ graph TD
 
 ```bash
 # Clone and setup
-git clone <repo-url>
+git clone https://github.com/AnshulRehpade/Backlog_Synthesizer_LangGraph.git
 cd Backlog_Synthesizer_LangGraph
 python3 -m venv .venv
 source .venv/bin/activate

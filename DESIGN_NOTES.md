@@ -45,4 +45,4 @@ There is no hosted demo yet. Run it locally with `streamlit run app.py`. The UI 
 
 ## Authorship
 
-This is a solo project. I designed and built all of it.
+This is a solo project: no one else worked on it. I designed it and built it with AI coding assistants (Kiro and Claude Code). I wrote the specifications, made the design decisions, reviewed the code, and drove the debugging and evaluation from measured results.

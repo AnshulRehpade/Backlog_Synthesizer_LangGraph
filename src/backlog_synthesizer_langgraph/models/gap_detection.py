@@ -47,6 +47,8 @@ class GapReportEntry(BaseModel):
     error_reason: str | None = None  # for unprocessed items
     # For related items: how the item relates to similar_ticket_id (follow-on, addition, bug).
     relation: str | None = None
+    # Entries with the same group describe the same piece of work and become one story.
+    group: int | None = None
 
 
 class GapReport(BaseModel):

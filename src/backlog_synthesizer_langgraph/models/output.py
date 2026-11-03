@@ -20,6 +20,10 @@ class UserStory(BaseModel):
     acceptance_criteria: list[AcceptanceCriterion] = Field(min_length=2, max_length=10)
     tags: list[str] = Field(min_length=1, max_length=5)
     needs_refinement: bool = False
+    # The existing ticket this story is about, and how: "replaces" (the meeting
+    # changes it), "relates_to" (builds on or fixes it), "alongside" (both stand).
+    linked_ticket: str | None = None
+    link_type: str | None = None
 
 
 class Epic(BaseModel):

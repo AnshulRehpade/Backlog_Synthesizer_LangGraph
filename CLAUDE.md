@@ -91,6 +91,16 @@ Gap detection's judge sees every match scoring at least `GAP_DETECTION_VERIFY_TH
 suggested resolution is applied. `evaluation/run_gap_eval.py` scores verdicts, conflicts
 caught, false alarms, tickets and resolutions on `evaluation/gap_labels.json`.
 
+### Work grouping and ticket links
+
+After classification, `gap_detection_node` calls `agents/work_grouping.assign_groups`: one LLM
+call groups story-eligible entries that are the same piece of work (`GapReportEntry.group`).
+A bad or missing answer falls back to one group per entry. `StoryWriterAgent` writes one
+story per group, framed by the most decisive entry (meeting_wins conflict > keep_both
+conflict > related > new), and sets `UserStory.linked_ticket` / `link_type`
+(`replaces` | `relates_to` | `alongside`), which the exporters include.
+`evaluation/run_gap_eval.py` also scores grouping against the `work` labels.
+
 ### route_after_parser Logic
 
 ```

@@ -12,7 +12,7 @@ Product managers and engineering leads lose hours after every planning meeting t
 - **Multi-agent:** three specialist agents run as graph nodes:
   - **Parser:** extracts features, pain points and decisions, each with a confidence score.
   - **Gap Detection:** classifies each item as new, duplicate or conflicting.
-  - **Story Writer:** writes stories and groups them into epics.
+  - **Story Writer:** writes one story per piece of work and groups them into epics. Before writing, one LLM call groups items that are the same work (a problem and its fix, or a request said twice), and each story records the ticket it replaces or relates to, which the Jira CSV and GitHub exports carry. On the sample meeting this cut 20 stories to 10.
 
   Three supporting nodes handle exceptions: an **LLM fallback** node, a **human review** node (`interrupt()`), and an **error** node. All routing logic lives in `graph/routing.py`, never inside nodes.
 - **Tools:** document parsing (including PDF), embeddings, vector search, a few-shot example store, LLM generation, and exporters. All sit behind Protocol interfaces (`tools/interfaces.py`), so Anthropic and OpenAI can be swapped through config.
@@ -35,7 +35,7 @@ The original version made a ReAct-style LLM call at every decision point, five p
 
 ## How I tested and evaluated it
 
-- **Tests:** 191 pytest tests across 13 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A coverage threshold is enforced in `pyproject.toml`. The original version had 554 tests at 81% coverage and cost about $0.009 per run.
+- **Tests:** 209 pytest tests across 14 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A coverage threshold is enforced in `pyproject.toml`. The original version had 554 tests at 81% coverage and cost about $0.009 per run.
 - **Evaluation harness** (`evaluation/run_eval.py`): runs the full graph against a golden dataset of 5 scenarios, each with expected story, duplicate and conflict counts. It reports the per-scenario result and the keyword overlap between the transcript and the generated stories (mean, min, max and standard deviation).
 - **Honest limitations:** five scenarios is a small set, and keyword overlap is only a rough proxy for story quality. My next step would be an LLM-as-judge rubric (completeness, faithfulness, acceptance-criteria quality) run as a LangSmith experiment over a larger dataset.
 

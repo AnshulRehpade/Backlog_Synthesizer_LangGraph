@@ -12,13 +12,27 @@ import csv
 import io
 from typing import Any
 
-from backlog_synthesizer_langgraph.models.output import StoryOutput
+from backlog_synthesizer_langgraph.models.output import StoryOutput, UserStory
+
+_LINK_PHRASES = {
+    "replaces": "Replaces",
+    "relates_to": "Relates to",
+    "alongside": "Alongside",
+}
+
+
+def link_text(story: UserStory) -> str:
+    """'Replaces PLAT-104' etc., or '' when the story isn't about an existing ticket."""
+    if not story.linked_ticket:
+        return ""
+    return f"{_LINK_PHRASES.get(story.link_type or '', 'Relates to')} {story.linked_ticket}"
 
 
 def export_jira_csv(story_output: StoryOutput) -> str:
     """Export stories as JIRA-compatible CSV.
 
-    Columns: Summary, Description, Issue Type, Labels, Epic Link, Acceptance Criteria
+    Columns: Summary, Description, Issue Type, Labels, Epic Name, Acceptance Criteria,
+    Linked Issue, Link Type (map these to an issue link during JIRA's CSV import)
 
     Args:
         story_output: The StoryOutput to export.
@@ -37,12 +51,16 @@ def export_jira_csv(story_output: StoryOutput) -> str:
         "Labels",
         "Epic Name",
         "Acceptance Criteria",
+        "Linked Issue",
+        "Link Type",
     ])
 
     for epic in story_output.epics:
         for story in epic.stories:
-            # Build description from user story
+            # Build description from user story, noting the ticket it's about
             description = story.user_story
+            if story.linked_ticket:
+                description += f"\n\n{link_text(story)}."
 
             # Build acceptance criteria as bullet list
             ac_text = "\n".join(
@@ -59,6 +77,8 @@ def export_jira_csv(story_output: StoryOutput) -> str:
                 labels,
                 epic.epic_title,
                 ac_text,
+                story.linked_ticket or "",
+                _LINK_PHRASES.get(story.link_type or "", "") if story.linked_ticket else "",
             ])
 
     return output.getvalue()
@@ -89,6 +109,8 @@ def export_github_markdown(story_output: StoryOutput) -> str:
             labels = ", ".join(f"`{tag}`" for tag in story.tags)
             lines.append(f"**Labels:** {labels}")
             lines.append(f"**Epic:** {epic.epic_title}")
+            if story.linked_ticket:
+                lines.append(f"**Linked ticket:** {link_text(story)}")
             if story.needs_refinement:
                 lines.append("**Status:** Needs Refinement")
             lines.append("")

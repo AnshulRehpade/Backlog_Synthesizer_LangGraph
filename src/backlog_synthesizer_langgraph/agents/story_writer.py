@@ -127,6 +127,54 @@ def _has_insufficient_detail(item: ExtractedItem) -> bool:
     return len(item.text.strip()) < 10 or item.confidence < MIN_ITEM_CONFIDENCE
 
 
+def _group_entries(entries: list[GapReportEntry]) -> list[list[GapReportEntry]]:
+    """Entries sharing a group, in order of first appearance; ungrouped ones alone."""
+    groups: dict[object, list[GapReportEntry]] = {}
+    for i, entry in enumerate(entries):
+        key = ("group", entry.group) if entry.group is not None else ("alone", i)
+        groups.setdefault(key, []).append(entry)
+    return list(groups.values())
+
+
+def _primary_entry(group: list[GapReportEntry]) -> GapReportEntry:
+    """The entry that decides how a merged story is framed and linked.
+
+    A change to a ticket outranks an addition, which outranks a related or new item.
+    """
+    def rank(entry: GapReportEntry) -> int:
+        if entry.classification == "conflict":
+            return 0 if _resolution(entry) == "meeting_wins" else 1
+        return 2 if entry.classification == "related" else 3
+    return min(group, key=rank)
+
+
+def _merge_entries(primary: GapReportEntry, group: list[GapReportEntry]) -> GapReportEntry:
+    """The primary entry, with the other entries' points added to its text."""
+    others = [e.item for e in group if e is not primary]
+    if not others:
+        return primary
+    text = primary.item.text + "\nThis story also covers these points from the meeting:\n" + "\n".join(
+        f"- {item.text}" for item in others
+    )
+    tags = list(dict.fromkeys(primary.item.tags + [t for item in others for t in item.tags]))[:3]
+    merged_item = primary.item.model_copy(update={
+        "text": text,
+        "confidence": max([primary.item.confidence] + [item.confidence for item in others]),
+        "tags": tags,
+    })
+    return primary.model_copy(update={"item": merged_item})
+
+
+def _link(entry: GapReportEntry) -> tuple[str | None, str | None]:
+    """(linked_ticket, link_type) for a story written from this entry."""
+    if entry.classification == "conflict" and entry.conflict_info is not None:
+        link_type = "alongside" if _resolution(entry) == "keep_both" else "replaces"
+        return entry.conflict_info.item_b_ticket_id, link_type
+    if entry.classification == "related" and entry.similar_ticket_id:
+        return entry.similar_ticket_id, "relates_to"
+    return None, None
+
+
 def _resolution(entry: GapReportEntry) -> str | None:
     """How a conflict is settled: the reviewer's decision, else the judge's suggestion.
 
@@ -294,9 +342,10 @@ class StoryWriterAgent:
     ) -> list[UserStory]:
         """Generate user stories from deduplicated gap report entries.
 
-        Filters entries to only "new" and "conflict" classifications, then
-        generates structured user stories for all eligible items concurrently
-        using asyncio.gather() for improved throughput.
+        Filters entries to the classifications that get stories, then writes one
+        story per piece of work: entries sharing a `group` (see work_grouping)
+        are merged into a single story. Stories are generated concurrently.
+        Each story records the ticket it's about and how (linked_ticket, link_type).
 
         Args:
             items: List of GapReportEntry items from the gap detection phase.
@@ -314,11 +363,18 @@ class StoryWriterAgent:
             logger.info("No eligible items for story generation.")
             return []
 
-        # Generate all stories concurrently
-        coros = [self._generate_single_story(entry) for entry in eligible_entries]
+        # One story per piece of work, generated concurrently
+        coros = [self._generate_group_story(group) for group in _group_entries(eligible_entries)]
         stories = await asyncio.gather(*coros)
 
         return list(stories)
+
+    async def _generate_group_story(self, group: list[GapReportEntry]) -> UserStory:
+        """Write one story for entries that are the same piece of work."""
+        primary = _primary_entry(group)
+        story = await self._generate_single_story(_merge_entries(primary, group))
+        linked_ticket, link_type = _link(primary)
+        return story.model_copy(update={"linked_ticket": linked_ticket, "link_type": link_type})
 
     async def _generate_single_story(self, entry: GapReportEntry) -> UserStory:
         """Generate a single user story from a gap report entry.

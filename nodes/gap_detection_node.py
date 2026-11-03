@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.agents.gap_detection import GapDetectionAgent
+from backlog_synthesizer_langgraph.agents.work_grouping import assign_groups
 from backlog_synthesizer_langgraph.config import PipelineConfig
 from backlog_synthesizer_langgraph.memory.audit_log import AuditLog
 from backlog_synthesizer_langgraph.memory.long_term import LongTermMemory
@@ -291,6 +292,8 @@ async def _execute_gap_detection(
 
     try:
         result = await agent.analyze_gaps(extracted_items)
+        # Items about the same piece of work become one story.
+        result = await assign_groups(result, llm_tool)
     except TransientToolError as e:
         duration_ms = int((time.time() - start_time) * 1000)
         error_info = {

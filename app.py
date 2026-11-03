@@ -28,6 +28,7 @@ import streamlit as st
 
 from graph.builder import compile_graph
 from graph.review import current_state, pending_review, resume_review, thread_config
+from backlog_synthesizer_langgraph.tools.exporters import link_text
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.models.inputs import (
     BacklogTicket,
@@ -696,6 +697,8 @@ if "result" in st.session_state and st.session_state["result"] is not None:
 
                 for story in epic.stories:
                     with st.expander(story.title):
+                        if story.linked_ticket:
+                            st.caption(f"🔗 {link_text(story)}")
                         st.markdown(f"**User Story:** {story.user_story}")
 
                         st.markdown("**Acceptance Criteria:**")

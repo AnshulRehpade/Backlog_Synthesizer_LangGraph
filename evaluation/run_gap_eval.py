@@ -10,6 +10,9 @@ items in evaluation/gap_labels.json against data/sample_backlog.json and reports
     - false alarms: items sent to conflict review that aren't conflicts
     - ticket: items linked to a ticket that point to the right one
     - resolution: conflicts whose suggested resolution is acceptable
+    - grouping: items merged into one story vs. the labeled pieces of work
+      (pair precision: merged pairs that are the same work; pair recall: same-work
+      pairs that were merged)
 """
 
 from __future__ import annotations
@@ -82,11 +85,36 @@ async def main() -> None:
         )
 
     review = sum(e.classification == "conflict" for e in entries)
+    print(_grouping_summary(labels, entries))
     print(
         f"\nverdicts {verdict_ok}/{len(labels)} | conflicts caught {caught}/{must_conflict} | "
         f"false alarms {false_alarms} | sent to review {review} | ticket {ticket_ok}/{ticket_total} | "
         f"resolution {res_ok}/{res_total}"
     )
+
+
+def _grouping_summary(labels: list[dict], entries) -> str:
+    from itertools import combinations
+
+    story_items = [i for i, e in enumerate(entries) if e.group is not None]
+    groups: dict[int, list[int]] = {}
+    for i in story_items:
+        groups.setdefault(entries[i].group, []).append(i)
+    lines = ["\ngroups:"]
+    for members in groups.values():
+        works = {labels[i]["work"] for i in members}
+        mark = "✅" if len(works) == 1 else "❌"
+        lines.append(f"  {mark} {', '.join(labels[i]['text'][:38] for i in members)}")
+    merged = {frozenset(p) for g in groups.values() for p in combinations(g, 2)}
+    same = {frozenset(p) for p in combinations(story_items, 2) if labels[p[0]]["work"] == labels[p[1]]["work"]}
+    precision = f"{len(merged & same)}/{len(merged)}" if merged else "-"
+    recall = f"{len(merged & same)}/{len(same)}" if same else "-"
+    work_units = len({labels[i]["work"] for i in story_items})
+    lines.append(
+        f"stories {len(groups)} (labeled pieces of work {work_units}) | "
+        f"pair precision {precision} | pair recall {recall}"
+    )
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

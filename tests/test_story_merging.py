@@ -161,3 +161,41 @@ def test_jira_csv_unlinked_story_has_empty_link_columns():
 
 def test_github_markdown_shows_link():
     assert "**Linked ticket:** Replaces PLAT-104" in export_github_markdown(_linked_output())
+
+
+# ─── Which ticket and which item lead a merged story ──────────────
+
+
+async def test_group_ticket_is_the_best_matching_items_ticket():
+    """A weaker (likelier wrong) match doesn't decide the link."""
+    good = GapDetectionAgent._related_entry(
+        _make_extracted_item("Add rate limiting to login"), SearchResult("PLAT-103", 0.46), 0.46, "adds a limit"
+    )
+    false_alarm = GapDetectionAgent._conflict_entry(
+        _make_extracted_item("Login allows 1000 attempts/sec"), SearchResult("PLAT-108", 0.41), 0.41, "x", "keep_both"
+    )
+    grouped = await assign_groups(_report(good, false_alarm), _llm('{"groups": [[0, 1]]}'))
+    assert {e.group_ticket for e in grouped.entries} == {"PLAT-103"}
+
+    agent, _ = _writer()
+    story = (await agent.generate_stories(grouped.entries))[0]
+    assert (story.linked_ticket, story.link_type) == ("PLAT-103", "relates_to")
+
+
+async def test_product_work_leads_a_merged_story_over_a_planning_decision():
+    agent, llm = _writer()
+    decision = _conflict("Start with SAML first for Acme's Q1 rollout", ticket="PLAT-109")
+    decision = decision.model_copy(update={
+        "item": decision.item.model_copy(update={"item_type": "decision"}), "group": 0, "group_ticket": "PLAT-109",
+    })
+    feature = _related("Add SAML 2.0 and OpenID Connect support", ticket="PLAT-109")
+    feature = feature.model_copy(update={"group": 0, "group_ticket": "PLAT-109"})
+
+    story = (await agent.generate_stories([decision, feature]))[0]
+
+    prompt = llm.generate.call_args.args[0]
+    lead, rest = prompt.split("This story also covers these points from the meeting:", 1)
+    assert "Add SAML 2.0 and OpenID Connect support" in lead
+    assert "- Start with SAML first" in rest
+    # The decisive conflict still sets the link.
+    assert (story.linked_ticket, story.link_type) == ("PLAT-109", "replaces")

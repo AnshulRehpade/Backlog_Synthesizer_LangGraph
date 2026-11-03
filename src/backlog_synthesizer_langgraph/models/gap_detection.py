@@ -49,6 +49,8 @@ class GapReportEntry(BaseModel):
     relation: str | None = None
     # Entries with the same group describe the same piece of work and become one story.
     group: int | None = None
+    # The existing ticket the group's story is about, chosen with the group (None: decide by rank).
+    group_ticket: str | None = None
 
 
 class GapReport(BaseModel):

@@ -8,6 +8,10 @@ so without this step each would become its own story.
 One LLM call sees every story-eligible item with the ticket it matched and
 returns groups; each group becomes one story. Any unusable answer falls back to
 one group per item, which is the behavior without this step.
+
+Each group's ticket (the one its story links to) is the ticket of its best-
+matching item, chosen in code: asking the LLM to pick tickets too made it group
+by ticket, merging separate work that touches the same ticket.
 """
 
 from __future__ import annotations
@@ -52,12 +56,19 @@ async def assign_groups(report: GapReport, llm_tool: LLMGenerationTool | None) -
 
     entries = list(report.entries)
     for number, members in enumerate(groups):
+        ticket = _group_ticket([entries[i] for i in members])
         for i in members:
-            entries[i] = entries[i].model_copy(update={"group": number})
+            entries[i] = entries[i].model_copy(update={"group": number, "group_ticket": ticket})
     merged = sum(1 for g in groups if len(g) > 1)
     if merged:
         logger.info("Grouped %d items into %d pieces of work", len(eligible), len(groups))
     return report.model_copy(update={"entries": entries})
+
+
+def _group_ticket(members) -> str | None:
+    """The ticket of the group's best-matching item; a weaker match is likelier to be wrong."""
+    linked = [e for e in members if e.similar_ticket_id]
+    return max(linked, key=lambda e: e.similarity_score).similar_ticket_id if linked else None
 
 
 async def _ask_for_groups(

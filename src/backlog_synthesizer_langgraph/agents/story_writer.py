@@ -136,30 +136,48 @@ def _group_entries(entries: list[GapReportEntry]) -> list[list[GapReportEntry]]:
     return list(groups.values())
 
 
+# Which item a merged story leads with: concrete product work first, planning last.
+_LEAD_ORDER = {"feature_request": 0, "pain_point": 1, "constraint": 1, "decision": 2}
+
+
 def _primary_entry(group: list[GapReportEntry]) -> GapReportEntry:
     """The entry that decides how a merged story is framed and linked.
 
-    A change to a ticket outranks an addition, which outranks a related or new item.
+    Only entries about the group's chosen ticket qualify (a single entry's match
+    can be wrong). Among them, a change to a ticket outranks an addition, which
+    outranks a related or new item.
     """
+    ticket = group[0].group_ticket
+    candidates = [e for e in group if e.similar_ticket_id == ticket] if ticket else group
+
     def rank(entry: GapReportEntry) -> int:
         if entry.classification == "conflict":
             return 0 if _resolution(entry) == "meeting_wins" else 1
         return 2 if entry.classification == "related" else 3
-    return min(group, key=rank)
+    return min(candidates or group, key=rank)
 
 
 def _merge_entries(primary: GapReportEntry, group: list[GapReportEntry]) -> GapReportEntry:
-    """The primary entry, with the other entries' points added to its text."""
-    others = [e.item for e in group if e is not primary]
-    if not others:
+    """The primary entry's framing, with the story led by its most concrete item.
+
+    The lead is the product work (a feature request before a pain point, before a
+    planning decision such as "start with SAML first"); every other item is
+    listed as a point the story also covers.
+    """
+    if len(group) == 1:
         return primary
-    text = primary.item.text + "\nThis story also covers these points from the meeting:\n" + "\n".join(
+    lead = min(
+        [primary] + [e for e in group if e is not primary],
+        key=lambda e: _LEAD_ORDER.get(e.item.item_type, 3),
+    ).item
+    others = [e.item for e in group if e.item is not lead]
+    text = lead.text + "\nThis story also covers these points from the meeting:\n" + "\n".join(
         f"- {item.text}" for item in others
     )
-    tags = list(dict.fromkeys(primary.item.tags + [t for item in others for t in item.tags]))[:3]
-    merged_item = primary.item.model_copy(update={
+    tags = list(dict.fromkeys(lead.tags + [t for item in others for t in item.tags]))[:3]
+    merged_item = lead.model_copy(update={
         "text": text,
-        "confidence": max([primary.item.confidence] + [item.confidence for item in others]),
+        "confidence": max([lead.confidence] + [item.confidence for item in others]),
         "tags": tags,
     })
     return primary.model_copy(update={"item": merged_item})

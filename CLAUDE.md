@@ -95,10 +95,13 @@ caught, false alarms, tickets and resolutions on `evaluation/gap_labels.json`.
 
 After classification, `gap_detection_node` calls `agents/work_grouping.assign_groups`: one LLM
 call groups story-eligible entries that are the same piece of work (`GapReportEntry.group`).
-A bad or missing answer falls back to one group per entry. `StoryWriterAgent` writes one
-story per group, framed by the most decisive entry (meeting_wins conflict > keep_both
-conflict > related > new), and sets `UserStory.linked_ticket` / `link_type`
-(`replaces` | `relates_to` | `alongside`), which the exporters include.
+A bad or missing answer falls back to one group per entry. Each group's ticket
+(`group_ticket`) is the ticket of its best-matching entry, chosen in code (asking the LLM
+to pick tickets made it group by ticket). `StoryWriterAgent` writes one story per group:
+the most decisive entry about that ticket (meeting_wins conflict > keep_both conflict >
+related > new) sets the framing and `UserStory.linked_ticket` / `link_type`
+(`replaces` | `relates_to` | `alongside`), which the exporters include; the most concrete
+item (feature request > pain point/constraint > decision) leads the story text.
 `evaluation/run_gap_eval.py` also scores grouping against the `work` labels.
 
 ### route_after_parser Logic

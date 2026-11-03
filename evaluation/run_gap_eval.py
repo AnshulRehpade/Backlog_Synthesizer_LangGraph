@@ -104,7 +104,21 @@ def _grouping_summary(labels: list[dict], entries) -> str:
     for members in groups.values():
         works = {labels[i]["work"] for i in members}
         mark = "✅" if len(works) == 1 else "❌"
-        lines.append(f"  {mark} {', '.join(labels[i]['text'][:38] for i in members)}")
+        want = sorted({labels[i]["ticket"] for i in members} - {None}) or ["none"]
+        lines.append(
+            f"  {mark} [ticket {entries[members[0]].group_ticket or 'none'}, want {'/'.join(want)}] "
+            f"{', '.join(labels[i]['text'][:38] for i in members)}"
+        )
+    # A group's story ticket is right if it's one its items are labeled with. With no
+    # labeled ticket, none is right, and so is any ticket if an item may be "related".
+    ticket_ok = 0
+    for members in groups.values():
+        want = {labels[i]["ticket"] for i in members} - {None}
+        got = entries[members[0]].group_ticket
+        if want:
+            ticket_ok += got in want
+        else:
+            ticket_ok += got is None or any("related" in labels[i]["verdicts"] for i in members)
     merged = {frozenset(p) for g in groups.values() for p in combinations(g, 2)}
     same = {frozenset(p) for p in combinations(story_items, 2) if labels[p[0]]["work"] == labels[p[1]]["work"]}
     precision = f"{len(merged & same)}/{len(merged)}" if merged else "-"
@@ -112,7 +126,7 @@ def _grouping_summary(labels: list[dict], entries) -> str:
     work_units = len({labels[i]["work"] for i in story_items})
     lines.append(
         f"stories {len(groups)} (labeled pieces of work {work_units}) | "
-        f"pair precision {precision} | pair recall {recall}"
+        f"pair precision {precision} | pair recall {recall} | group ticket {ticket_ok}/{len(groups)}"
     )
     return "\n".join(lines)
 

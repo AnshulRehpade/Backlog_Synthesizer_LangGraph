@@ -261,34 +261,61 @@ class GapDetectionAgent:
         """
         if self._llm_tool is None:
             return None, ""
-
         ticket_text = match.metadata.get("content") or match.metadata.get("title") or ""
-        prompt = (
-            f"Existing ticket {match.item_id}: {ticket_text}\n"
-            f"New requirement: {item.text}\n"
-        )
-        try:
-            raw = await asyncio.to_thread(
-                self._llm_tool.generate, prompt, _VERIFY_SYSTEM_PROMPT
-            )
-        except Exception as e:
-            logger.warning("LLM verification failed for '%s': %s", item.text[:50], e)
-            return None, ""
+        return await verify_match(self._llm_tool, match.item_id, ticket_text, item.text)
 
-        return self._parse_verdict(raw)
 
-    @staticmethod
-    def _parse_verdict(raw: Any) -> tuple[str | None, str]:
-        if not isinstance(raw, str):
-            return None, ""
-        found = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not found:
-            return None, ""
-        try:
-            data = json.loads(found.group(0))
-        except json.JSONDecodeError:
-            return None, ""
-        verdict = str(data.get("verdict", "")).strip().lower()
-        if verdict not in _VERDICTS:
-            return None, ""
-        return verdict, str(data.get("reason", "")).strip()
+async def verify_match(
+    llm_tool: LLMGenerationTool, ticket_id: str, ticket_text: str, item_text: str
+) -> tuple[str | None, str]:
+    """Ask the LLM whether a requirement duplicates, conflicts with, or is unrelated to a ticket.
+
+    Returns:
+        (verdict, reason). verdict is None when the call or its output is unusable.
+    """
+    prompt = f"Existing ticket {ticket_id}: {ticket_text}\nNew requirement: {item_text}\n"
+    try:
+        raw = await asyncio.to_thread(llm_tool.generate, prompt, _VERIFY_SYSTEM_PROMPT)
+    except Exception as e:
+        logger.warning("LLM verification failed for '%s': %s", item_text[:50], e)
+        return None, ""
+    return _parse_verdict(raw)
+
+
+def _parse_verdict(raw: Any) -> tuple[str | None, str]:
+    if not isinstance(raw, str):
+        return None, ""
+    found = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not found:
+        return None, ""
+    try:
+        data = json.loads(found.group(0))
+    except json.JSONDecodeError:
+        return None, ""
+    verdict = str(data.get("verdict", "")).strip().lower()
+    if verdict not in _VERDICTS:
+        return None, ""
+    return verdict, str(data.get("reason", "")).strip()
+
+
+def build_entry(
+    item: ExtractedItem,
+    classification: str,
+    score: float,
+    ticket_id: str | None = None,
+    reason: str = "",
+) -> GapReportEntry:
+    """Build a gap report entry for a classification decided outside the agent.
+
+    duplicate and conflict need the ticket the item matches.
+    """
+    if classification == "new":
+        return GapDetectionAgent._new_entry(item, score)
+    if ticket_id is None:
+        raise ValueError(f"'{classification}' needs a ticket_id")
+    match = SearchResult(item_id=ticket_id, score=score)
+    if classification == "duplicate":
+        return GapDetectionAgent._duplicate_entry(item, match, score)
+    if classification == "conflict":
+        return GapDetectionAgent._conflict_entry(item, match, score, reason)
+    raise ValueError(f"Unknown classification '{classification}'")

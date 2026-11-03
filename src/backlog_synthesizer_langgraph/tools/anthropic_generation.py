@@ -115,27 +115,53 @@ class AnthropicGenerationTool:
 
         if system_prompt is not None:
             kwargs["system"] = system_prompt
+        # Accepted on API version 2023-06-01 (what this SDK sends). Version 2026-10-21
+        # rejects temperature, so drop this if the SDK is upgraded to a release using it.
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
 
+        response = self._send(kwargs)
+        content = "".join(block.text for block in response.content if block.type == "text")
+        if not content:
+            raise ToolError("LLM returned empty content in response.")
+
+        # Extract token usage from response
+        usage = {
+            "input_tokens": getattr(response.usage, "input_tokens", 0),
+            "output_tokens": getattr(response.usage, "output_tokens", 0),
+        }
+        return content, usage
+
+    def create_message(
+        self,
+        messages: list[dict],
+        system: str | None = None,
+        tools: list[dict] | None = None,
+        max_tokens: int | None = None,
+    ):
+        """Send a full Messages API request and return the SDK Message.
+
+        Used for tool calling, where the caller needs the content blocks
+        (tool_use, text) and stop_reason rather than just the text.
+
+        Raises:
+            TransientToolError, PermanentToolError, ToolError: as for generate().
+        """
+        kwargs: dict = {
+            "model": self._model,
+            "max_tokens": max_tokens or self._max_tokens,
+            "messages": messages,
+        }
+        if system is not None:
+            kwargs["system"] = system
+        if tools:
+            kwargs["tools"] = tools
+        return self._send(kwargs)
+
+    def _send(self, kwargs: dict):
+        """Call messages.create, translating SDK exceptions into ToolError subtypes."""
         try:
-            response = self._client.messages.create(**kwargs)
-            text_parts = [
-                block.text
-                for block in response.content
-                if block.type == "text"
-            ]
-            content = "".join(text_parts)
-            if not content:
-                raise ToolError("LLM returned empty content in response.")
-
-            # Extract token usage from response
-            usage = {
-                "input_tokens": getattr(response.usage, "input_tokens", 0),
-                "output_tokens": getattr(response.usage, "output_tokens", 0),
-            }
-
-            return content, usage
+            return self._client.messages.create(**kwargs)
 
         except anthropic.AuthenticationError as e:
             raise PermanentToolError(
@@ -173,9 +199,6 @@ class AnthropicGenerationTool:
                     f"API error (HTTP {e.status_code}): {e.message}",
                     original_error=e,
                 ) from e
-
-        except (TransientToolError, PermanentToolError, ToolError):
-            raise
 
         except Exception as e:
             raise ToolError(

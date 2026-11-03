@@ -7,7 +7,10 @@ predefined set of actions.
 This node:
 1. Builds an observation summary from current state
 2. Defines available actions based on current_step
-3. Prompts the LLM to choose an action
+3. Chooses an action. With FALLBACK_MODE=agent (the default), a bounded
+   tool-calling agent investigates first and may correct gap-detection labels
+   (agents/fallback_agent.py). If it can't run or reaches no decision, a single
+   LLM call picks from the menu, as with FALLBACK_MODE=menu.
 4. Executes the chosen action (retry, return partial, or halt)
 5. Logs everything to audit log and records OTel span
 
@@ -24,6 +27,12 @@ import time
 from datetime import datetime, timezone
 
 from graph.state import PipelineState
+from backlog_synthesizer_langgraph.agents.fallback_agent import (
+    AgentOutcome,
+    run_fallback_agent,
+    supports_tool_calling,
+)
+from backlog_synthesizer_langgraph.agents.fallback_tools import FallbackToolbox
 from backlog_synthesizer_langgraph.config import PipelineConfig
 from nodes.gap_detection_node import THRESHOLD_STEP, effective_duplicate_threshold
 from backlog_synthesizer_langgraph.memory.audit_log import AuditLog
@@ -60,7 +69,7 @@ _PARSER_ACTIONS = {
 _GAP_DETECTION_ACTIONS = {
     "lower_threshold": "Reduce duplicate threshold by 0.05 and retry gap detection — items may be genuinely new",
     "return_nothing_new": "Halt gracefully — all items already exist in backlog",
-    "proceed_with_conflicts_only": "Continue to story_writer with only conflict items",
+    "proceed_with_conflicts_only": "Continue to story_writer: write stories for new and conflict items, skip duplicates",
     "request_review": "Flag for human review — set needs_human_review=True",
     "return_partial": "Return current results with a warning",
     "halt": "Stop the pipeline and report permanent failure",
@@ -142,9 +151,9 @@ async def _execute_fallback(
     # 2. Get available actions for current step
     available_actions = _get_available_actions(current_step)
 
-    # 3. Call LLM to choose action
-    action, reason, confidence = await _ask_llm_for_decision(
-        observation, available_actions, current_step
+    # 3. Decide: the agent investigates first; the single menu call is the backup.
+    action, reason, confidence, agent_outcome, decided_by = await _decide(
+        state, observation, available_actions, current_step
     )
 
     # 4. Record span attributes
@@ -154,6 +163,12 @@ async def _execute_fallback(
         span.set_attribute("current_step", current_step)
         span.set_attribute("retry_count", retry_count)
         span.set_attribute("fallback_triggered_by", current_step)
+        span.set_attribute("decided_by", decided_by)
+        if agent_outcome is not None:
+            span.set_attribute("agent.turns", agent_outcome.turns)
+            span.set_attribute("agent.tool_calls", len(agent_outcome.steps))
+            span.set_attribute("agent.tokens", agent_outcome.tokens_used)
+            span.set_attribute("agent.stopped_because", agent_outcome.stopped_because)
 
     duration_ms = int((time.time() - start_time) * 1000)
     is_retry = action in ("retry_story_writer", "retry_parser", "lower_threshold")
@@ -167,6 +182,7 @@ async def _execute_fallback(
         confidence=confidence,
         is_retry=is_retry,
         duration_ms=duration_ms,
+        decided_by=decided_by,
     )
 
     # 6. Build result based on chosen action
@@ -275,10 +291,100 @@ async def _execute_fallback(
             status="partial_failure",
         )
 
+    # 7. Agent corrections and its tool calls go into state alongside the action.
+    if agent_outcome is not None:
+        _apply_agent_outcome(result, agent_outcome, decided_by)
+
     if span is not None:
         span.end()
 
     return result
+
+
+# ─── Agent ────────────────────────────────────────────────────────
+
+
+async def _decide(
+    state: PipelineState,
+    observation: str,
+    available_actions: dict[str, str],
+    current_step: str,
+) -> tuple[str, str, float, AgentOutcome | None, str]:
+    """Choose the action: agent if enabled and it decides, otherwise the menu call.
+
+    Returns:
+        (action, reason, confidence, agent_outcome, decided_by) where decided_by
+        is "agent" or "menu". agent_outcome is set whenever the agent ran.
+    """
+    agent_outcome = None
+    if PipelineConfig.from_env().fallback_mode == "agent":
+        agent_outcome = await _run_agent(state, observation, available_actions, current_step)
+        if agent_outcome is not None and agent_outcome.decision is not None:
+            d = agent_outcome.decision
+            return d.action, d.reason, d.confidence, agent_outcome, "agent"
+
+    action, reason, confidence = await _ask_llm_for_decision(
+        observation, available_actions, current_step
+    )
+    return action, reason, confidence, agent_outcome, "menu"
+
+
+async def _run_agent(
+    state: PipelineState,
+    observation: str,
+    available_actions: dict[str, str],
+    current_step: str,
+) -> AgentOutcome | None:
+    """Run the fallback agent, or return None if it can't run here."""
+    try:
+        config = PipelineConfig.from_env()
+        llm_tool = config.create_llm_tool()
+        if not supports_tool_calling(llm_tool):
+            logger.info("LLM provider has no tool calling — using the menu fallback")
+            return None
+        # The judge behind `compare` runs at temperature 0, like gap detection's.
+        judge = config.create_llm_tool(temperature=0.0)
+        toolbox = FallbackToolbox(state, available_actions, llm_tool=judge)
+        return await run_fallback_agent(toolbox, llm_tool, observation, current_step)
+    except Exception as e:
+        logger.warning("Fallback agent failed, using the menu fallback: %s", e)
+        return None
+
+
+def _apply_agent_outcome(result: dict, outcome: AgentOutcome, decided_by: str) -> None:
+    """Add the agent's corrections and tool-call notes to the node's state update.
+
+    Corrections count only when the agent's decision was used. Notes go before
+    the decision note, because routing reads the last note's action.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    notes = [
+        {
+            "node": "llm_fallback_agent",
+            "action": "agent_step",
+            "tool": step.tool,
+            "note": f"{step.tool}({_format_args(step.input)}) → "
+                    f"{'ERROR: ' if step.is_error else ''}{step.result}",
+            "timestamp": now,
+        }
+        for step in outcome.steps
+    ]
+    if decided_by == "agent":
+        if outcome.updated_gap_output is not None:
+            result["gap_output"] = outcome.updated_gap_output
+    else:
+        notes.append({
+            "node": "llm_fallback_agent",
+            "action": "agent_gave_up",
+            "note": f"Agent stopped ({outcome.stopped_because}) after {len(outcome.steps)} "
+                    "tool calls without a decision; used the menu fallback",
+            "timestamp": now,
+        })
+    result["react_notes"] = notes + result["react_notes"]
+
+
+def _format_args(args: dict) -> str:
+    return ", ".join(f"{k}={v!r}" for k, v in args.items() if k != "reason")
 
 
 # ─── Observation Builder ──────────────────────────────────────────
@@ -546,6 +652,7 @@ def _log_to_audit(
     confidence: float,
     is_retry: bool,
     duration_ms: int,
+    decided_by: str = "menu",
 ) -> None:
     """Record the fallback decision to the audit log.
 
@@ -557,11 +664,12 @@ def _log_to_audit(
         confidence: Confidence score.
         is_retry: Whether this is a retry attempt.
         duration_ms: Time spent making the decision.
+        decided_by: "agent" or "menu".
     """
     input_summary = f"observation={observation[:200]}"
     output_summary = (
         f"action={action}, reason={reason[:150]}, "
-        f"confidence={confidence:.2f}, is_retry={is_retry}"
+        f"confidence={confidence:.2f}, is_retry={is_retry}, decided_by={decided_by}"
     )
 
     entry = AuditEntry(

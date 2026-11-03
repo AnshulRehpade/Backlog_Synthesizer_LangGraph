@@ -83,6 +83,9 @@ class PipelineConfig:
     # Few-shot prompting
     few_shot_enabled: bool = True
 
+    # LLM fallback: "agent" investigates with tools first; "menu" is the single-call picker
+    fallback_mode: str = "agent"
+
     # Observability
     otel_enabled: bool = True
     runs_dir: str = "runs"
@@ -195,6 +198,10 @@ class PipelineConfig:
         if few_shot_enabled is not None:
             env_values["few_shot_enabled"] = few_shot_enabled.lower() in ("true", "1", "yes")
 
+        fallback_mode = os.environ.get("FALLBACK_MODE")
+        if fallback_mode:
+            env_values["fallback_mode"] = fallback_mode.strip().lower()
+
         # Load config file overrides
         resolved_path = config_path or os.environ.get("BACKLOG_SYNTHESIZER_CONFIG")
         if resolved_path:
@@ -241,6 +248,7 @@ class PipelineConfig:
             "eval_f1_threshold",
             "eval_regression_threshold",
             "few_shot_enabled",
+            "fallback_mode",
         }
 
         return {k: v for k, v in data.items() if k in valid_keys}

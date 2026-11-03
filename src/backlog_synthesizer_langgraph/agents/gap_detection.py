@@ -312,23 +312,11 @@ class GapDetectionAgent:
         """
         if self._llm_tool is None:
             return None, "", None
-
         ticket_text = match.metadata.get("content") or match.metadata.get("title") or ""
-        status = match.metadata.get("status")
-        status_text = f" (status: {status})" if status else ""
-        prompt = (
-            f"Existing ticket {match.item_id}{status_text}: {ticket_text}\n"
-            f"New requirement: {item.text}\n"
+        return await verify_match(
+            self._llm_tool, match.item_id, ticket_text, item.text, match.metadata.get("status")
         )
-        try:
-            raw = await asyncio.to_thread(
-                self._llm_tool.generate, prompt, _VERIFY_SYSTEM_PROMPT
-            )
-        except Exception as e:
-            logger.warning("LLM verification failed for '%s': %s", item.text[:50], e)
-            return None, "", None
 
-        return self._parse_verdict(raw)
 
     @staticmethod
     def _parse_verdict(raw: Any) -> tuple[str | None, str, str | None]:
@@ -348,6 +336,31 @@ class GapDetectionAgent:
         return verdict, str(data.get("reason", "")).strip(), suggestion
 
 
+async def verify_match(
+    llm_tool: LLMGenerationTool,
+    ticket_id: str,
+    ticket_text: str,
+    item_text: str,
+    status: str | None = None,
+) -> tuple[str | None, str, str | None]:
+    """Ask the LLM how a requirement relates to a ticket.
+
+    Shared by gap detection and the fallback agent's compare tool.
+
+    Returns:
+        (verdict, reason, suggestion). verdict is None when the call or its output
+        is unusable; suggestion is a RESOLUTIONS key for conflicts, else None.
+    """
+    status_text = f" (status: {status})" if status else ""
+    prompt = f"Existing ticket {ticket_id}{status_text}: {ticket_text}\nNew requirement: {item_text}\n"
+    try:
+        raw = await asyncio.to_thread(llm_tool.generate, prompt, _VERIFY_SYSTEM_PROMPT)
+    except Exception as e:
+        logger.warning("LLM verification failed for '%s': %s", item_text[:50], e)
+        return None, "", None
+    return GapDetectionAgent._parse_verdict(raw)
+
+
 def _suggest_resolution(data: dict) -> str | None:
     """Derive a RESOLUTIONS key from the judge's two yes/no answers.
 
@@ -362,3 +375,29 @@ def _suggest_resolution(data: dict) -> str | None:
         return "meeting_wins"
     suggestion = str(data.get("suggestion", "")).strip().lower()
     return suggestion if suggestion in RESOLUTIONS else None
+
+
+def build_entry(
+    item: ExtractedItem,
+    classification: str,
+    score: float,
+    ticket_id: str | None = None,
+    reason: str = "",
+    suggestion: str | None = None,
+) -> GapReportEntry:
+    """Build a gap report entry for a classification decided outside the agent.
+
+    duplicate, conflict and related need the ticket the item matches.
+    """
+    if classification == "new":
+        return GapDetectionAgent._new_entry(item, score)
+    if ticket_id is None:
+        raise ValueError(f"'{classification}' needs a ticket_id")
+    match = SearchResult(item_id=ticket_id, score=score)
+    if classification == "duplicate":
+        return GapDetectionAgent._duplicate_entry(item, match, score)
+    if classification == "conflict":
+        return GapDetectionAgent._conflict_entry(item, match, score, reason, suggestion)
+    if classification == "related":
+        return GapDetectionAgent._related_entry(item, match, score, reason)
+    raise ValueError(f"Unknown classification '{classification}'")

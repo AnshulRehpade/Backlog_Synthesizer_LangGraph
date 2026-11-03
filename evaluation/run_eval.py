@@ -4,6 +4,7 @@ Usage:
     python -m evaluation.run_eval
     python -m evaluation.run_eval --dataset evaluation/golden_dataset.json
     python -m evaluation.run_eval --verbose
+    python -m evaluation.run_eval --fallback-mode menu   # or agent
 
 Evaluates each golden entry by:
 1. Running the full pipeline with the entry's transcript and backlog
@@ -21,6 +22,7 @@ import logging
 import math
 import os
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -31,6 +33,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from graph.builder import compile_graph
+from graph.review import pending_review
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.models.inputs import (
     BacklogTicket,
@@ -57,6 +60,26 @@ def _load_golden_dataset(path: Path) -> list[GoldenDatasetEntry]:
     """Load golden dataset from JSON file."""
     data = json.loads(path.read_text(encoding="utf-8"))
     return [GoldenDatasetEntry(**entry) for entry in data]
+
+
+def _fallback_summary(react_notes: list) -> tuple[list[dict], list[str]]:
+    """Fallback decisions and agent tool calls recorded in a run's notes."""
+    fallbacks = [
+        {
+            "from_step": n.get("from_step", "?"),
+            "action": n.get("action", "?"),
+            "decided_by": n.get("decided_by", "menu"),
+            **({"agent": n["agent"]} if "agent" in n else {}),
+        }
+        for n in react_notes
+        if isinstance(n, dict) and n.get("node") == "llm_fallback"
+    ]
+    agent_steps = [
+        n.get("note", "")
+        for n in react_notes
+        if isinstance(n, dict) and n.get("node") == "llm_fallback_agent"
+    ]
+    return fallbacks, agent_steps
 
 
 def _compute_keyword_overlap(transcript: str, stories_text: str) -> float:
@@ -136,6 +159,7 @@ async def _run_single_entry(
     # own collection so earlier entries can't show up as duplicates of later ones.
     os.environ["CHROMA_COLLECTION"] = f"eval_{entry.id}_{session_id[:8]}"
 
+    started = time.time()
     try:
         final_state = await graph.ainvoke(initial_state, config=config)
     except Exception as e:
@@ -146,6 +170,10 @@ async def _run_single_entry(
             passed=False,
             failure_reason=f"Pipeline crashed: {e}",
         )
+
+    duration_ms = int((time.time() - started) * 1000)
+    fallbacks, agent_steps = _fallback_summary(final_state.get("react_notes", []))
+    paused_for_review = pending_review(final_state) is not None
 
     # Extract results
     story_output = final_state.get("story_output")
@@ -198,6 +226,15 @@ async def _run_single_entry(
             f"{duplicates_found} dup, {conflicts_found} conflict, "
             f"overlap={keyword_overlap:.2f}, status={status}"
         )
+        for fb in fallbacks:
+            agent = fb.get("agent")
+            agent_text = (
+                f", agent {agent['tool_calls']} calls/{agent['tokens']} tok/{agent['stopped_because']}"
+                if agent else ""
+            )
+            print(f"     fallback from {fb['from_step']}: {fb['action']} (by {fb['decided_by']}{agent_text})")
+        if paused_for_review:
+            print("     paused for human review")
         if failure_reason:
             print(f"     Reason: {failure_reason}")
 
@@ -209,6 +246,11 @@ async def _run_single_entry(
         conflicts_found=conflicts_found,
         passed=passed,
         failure_reason=failure_reason,
+        status=status,
+        duration_ms=duration_ms,
+        fallbacks=fallbacks,
+        agent_steps=agent_steps,
+        paused_for_review=paused_for_review,
     )
 
 
@@ -304,7 +346,15 @@ def main():
         default=None,
         help="Write results as JSON to this path",
     )
+    parser.add_argument(
+        "--fallback-mode",
+        choices=["agent", "menu"],
+        default=None,
+        help="Override FALLBACK_MODE for this run",
+    )
     args = parser.parse_args()
+    if args.fallback_mode:
+        os.environ["FALLBACK_MODE"] = args.fallback_mode
 
     summary = asyncio.run(run_evaluation(args.dataset, verbose=args.verbose))
 

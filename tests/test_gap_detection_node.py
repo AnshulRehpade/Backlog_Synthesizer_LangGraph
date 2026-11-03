@@ -584,12 +584,12 @@ def test_routing_returns_error_node_with_retry_count_all_duplicates():
     assert result == "error_node"
 
 
-def test_routing_returns_error_node_with_retry_count_high_duplicates():
-    """Test routing returns 'error_node' when retry_count >= 1 and >80% duplicates."""
+def test_routing_continues_with_high_duplicates_after_retry():
+    """After a retry, >80% duplicates with some new work continues — the new item still needs a story."""
     state = _make_base_state(
         gap_output=_make_gap_report(new_count=1, duplicate_count=9, conflict_count=0),
         retry_count=1,
     )
 
     result = route_after_gap_detection(state)
-    assert result == "error_node"
+    assert result == "story_writer"

@@ -131,7 +131,8 @@ def route_after_gap_detection(state: PipelineState) -> str:
         - If new_count + conflict_count == 0
           → "llm_fallback_node" (nothing to process downstream)
         - If duplicate_count / total_items > 0.8
-          → "llm_fallback_node" (more than 80% duplicates — flag for review)
+          → "llm_fallback_node" (more than 80% duplicates — flag for review);
+          after a retry → "story_writer", since the run still has new work
         - Otherwise → "story_writer" (success)
 
     Args:
@@ -173,24 +174,23 @@ def route_after_gap_detection(state: PipelineState) -> str:
         )
         return "llm_fallback_node"
 
-    # Check: >80% duplicates
+    # Check: >80% duplicates. There is still new work here (the all-duplicates case
+    # returned above), so after a retry continue with it rather than fail the run.
     if total_items > 0 and (duplicate_count / total_items) > 0.8:
         retry_count = state.get("retry_count", 0)
         if retry_count >= 1:
             logger.info(
-                "Routing after gap_detection: >80%% duplicates (%d/%d), "
-                "retry_count=%d → error_node",
+                "Routing after gap_detection: >80%% duplicates (%d/%d) after retry — continuing",
                 duplicate_count,
                 total_items,
-                retry_count,
             )
-            return "error_node"
-        logger.info(
-            "Routing after gap_detection: >80%% duplicates (%d/%d) → llm_fallback_node",
-            duplicate_count,
-            total_items,
-        )
-        return "llm_fallback_node"
+        else:
+            logger.info(
+                "Routing after gap_detection: >80%% duplicates (%d/%d) → llm_fallback_node",
+                duplicate_count,
+                total_items,
+            )
+            return "llm_fallback_node"
 
     # Success path
     logger.info(

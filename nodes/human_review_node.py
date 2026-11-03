@@ -240,6 +240,7 @@ def _build_review_summary(state: PipelineState) -> str:
         last_note = react_notes[-1] if react_notes else {}
         if isinstance(last_note, dict):
             lines.append(f"Trigger: {last_note.get('note', 'Unknown')}")
+        lines.extend(_agent_findings(react_notes))
 
     # Parser output summary
     parser_output = state.get("parser_output")
@@ -269,6 +270,20 @@ def _build_review_summary(state: PipelineState) -> str:
         lines.append(f"Errors: {len(errors)}")
 
     return "\n".join(lines) if lines else "No additional context available."
+
+
+def _agent_findings(react_notes: list) -> list[str]:
+    """Judge verdicts and corrections from the fallback agent since the last review.
+
+    These are the agent's evidence, so the reviewer sees why it asked for help.
+    """
+    findings = []
+    for note in reversed(react_notes):
+        if not isinstance(note, dict) or note.get("node") == "human_review":
+            break
+        if note.get("node") == "llm_fallback_agent" and note.get("tool") in ("compare", "reclassify"):
+            findings.append(f"Agent: {note.get('note', '')}")
+    return list(reversed(findings))
 
 
 def _get_triggering_step(state: PipelineState) -> str:

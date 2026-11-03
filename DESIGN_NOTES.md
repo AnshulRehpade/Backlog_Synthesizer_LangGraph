@@ -28,15 +28,15 @@ Product managers and engineering leads lose hours after every planning meeting t
 The original version made a ReAct-style LLM call at every decision point, five per run. In the migration I replaced that with three tiers:
 
 1. **Deterministic conditional edges** (zero cost) for the normal path.
-2. **One LLM fallback call** only when something unexpected happens: zero items extracted, every item a duplicate, or zero epics produced.
+2. **One LLM fallback call** only when something unexpected happens: zero items extracted, every item a duplicate, or zero epics produced. An opt-in tool-calling agent (`FALLBACK_MODE=agent`) can investigate before choosing; measured against the single call it made the same decisions at higher cost (`evaluation/agent_vs_menu.md`), so it isn't the default.
 3. **Human review** through `interrupt()` for decisions that need human judgment. Every conflict with an existing ticket is one of those: the run pauses once, before stories are written, with all conflicts on one screen. Each is pre-set to the judge's suggested resolution (meeting wins, keep the ticket, or keep both), so the common case is one click.
 
 **Tradeoff:** most runs now use no routing LLM calls at all. Routing is predictable and easy to unit-test, because every edge is a plain function. The cost is flexibility. The thresholds (minimum item counts, confidence cut-offs, 0.80/0.50 similarity) are hand-tuned, so an unusual transcript can be misrouted where a ReAct agent might have adapted. The LLM fallback and human review tiers are the safety net for that, and the thresholds are environment variables so they can be tuned without code changes.
 
 ## How I tested and evaluated it
 
-- **Tests:** 211 pytest tests across 14 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A coverage threshold is enforced in `pyproject.toml`. The original version had 554 tests at 81% coverage and cost about $0.009 per run.
-- **Evaluation harness** (`evaluation/run_eval.py`): runs the full graph against a golden dataset of 5 scenarios, each with expected story, duplicate and conflict counts. It reports the per-scenario result and the keyword overlap between the transcript and the generated stories (mean, min, max and standard deviation).
+- **Tests:** 260 pytest tests across 17 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A coverage threshold is enforced in `pyproject.toml`. The original version had 554 tests at 81% coverage and cost about $0.009 per run.
+- **Evaluation harness** (`evaluation/run_eval.py`): runs the full graph against a golden dataset of 8 scenarios, each with expected story, duplicate and conflict counts. It reports the per-scenario result and the keyword overlap between the transcript and the generated stories (mean, min, max and standard deviation).
 - **Honest limitations:** five scenarios is a small set, and keyword overlap is only a rough proxy for story quality. My next step would be an LLM-as-judge rubric (completeness, faithfulness, acceptance-criteria quality) run as a LangSmith experiment over a larger dataset.
 
 ## Demo

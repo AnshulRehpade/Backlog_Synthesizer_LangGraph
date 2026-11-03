@@ -89,6 +89,10 @@ class PipelineConfig:
     # Pause before writing stories so a person settles every conflict (one review per run)
     conflict_review: bool = True
 
+    # LLM fallback: "menu" is the single-call picker; "agent" investigates with tools
+    # first (opt-in — see evaluation/agent_vs_menu.md for why it isn't the default)
+    fallback_mode: str = "menu"
+
     # Observability
     otel_enabled: bool = True
     runs_dir: str = "runs"
@@ -209,6 +213,10 @@ class PipelineConfig:
         if conflict_review is not None:
             env_values["conflict_review"] = conflict_review.lower() in ("true", "1", "yes")
 
+        fallback_mode = os.environ.get("FALLBACK_MODE")
+        if fallback_mode:
+            env_values["fallback_mode"] = fallback_mode.strip().lower()
+
         # Load config file overrides
         resolved_path = config_path or os.environ.get("BACKLOG_SYNTHESIZER_CONFIG")
         if resolved_path:
@@ -257,6 +265,7 @@ class PipelineConfig:
             "eval_regression_threshold",
             "few_shot_enabled",
             "conflict_review",
+            "fallback_mode",
         }
 
         return {k: v for k, v in data.items() if k in valid_keys}

@@ -1,0 +1,37 @@
+Mobile Team — Weekly Planning (Fitness App)
+Date: 2026-12-04
+Attendees: Priya (PM), Sam (iOS), Jordan (Android), Alex (Backend), Rosa (Design)
+
+---
+
+Priya: We only have thirty minutes today, so let's go fast. Jordan, can you take notes?
+
+Jordan: Sure.
+
+Priya: The number one thing from app store reviews: people lose their workouts at the gym. A lot of gyms have no signal in the basement, and when they hit save, the app throws an error and the whole workout is gone. We got a wave of one-star reviews about it.
+
+Sam: The fix is to save workouts on the device first and sync them to the server when the connection comes back. The user shouldn't even notice they were offline.
+
+Alex: I can handle the sync endpoint and conflict handling on the backend.
+
+Priya: Next, reminders. Everyone gets the daily reminder at 8am, and people who train in the evening hate it. Let users pick their own reminder time.
+
+Rosa: Dark mode is on track for this sprint, following the system setting. Designs are done.
+
+Priya: Nice. The progress charts have a bug — workouts logged after midnight get counted on the wrong day, so the weekly totals are off. I think it's a timezone issue.
+
+Alex: Yes, we store the date in UTC and the chart groups by UTC day. Should be a quick fix.
+
+Priya: Separately, users want to see a yearly view of their progress, not just the weekly chart. Keep the weekly chart, but add a yearly view next to it.
+
+Sam: On login — we should add Sign in with Apple. Apple requires it if we offer other social logins later, and people keep asking for it.
+
+Jordan: We also still need to push workouts into Apple Health. That one has been sitting in the backlog for a while.
+
+Priya: Right. Business side: we want to offer an annual subscription at $59.99 alongside the monthly plan.
+
+Sam: One more small one. People want a rest timer between sets that vibrates when the rest is over.
+
+Rosa: I can mock that up this week.
+
+Priya: Okay, thanks everyone. I'll prioritize all of this in Linear tomorrow and share the sprint plan.

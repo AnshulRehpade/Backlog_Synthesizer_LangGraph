@@ -1,0 +1,29 @@
+Data Platform Team — Monthly Planning
+Date: 2026-12-07
+Attendees: Hana (Data Lead), Victor (Data Engineer), Ines (Analytics), Tom (Security), Leila (Finance Ops)
+
+---
+
+Hana: Quick agenda: data freshness, then compliance, then the rest of the backlog. Let's try to finish early.
+
+Ines: Freshness first. Leadership looks at the sales dashboard every morning and complains that it shows yesterday's numbers. During the holiday campaign they want to see orders within minutes, not the next day.
+
+Victor: Right now everything loads in the nightly batch at 2am. For orders and payments we should switch to streaming change data capture so they land in the warehouse within about five minutes. The rest can stay nightly.
+
+Tom: Compliance. Legal told us we have to keep raw event data for thirteen months for audits. We delete it after thirty days today.
+
+Tom: And related to that — we store customer email addresses in plain text in the events table. We need to hash or tokenize emails before they ever land in the warehouse.
+
+Leila: From finance: right now every employee can open every Looker dashboard, including the revenue and payroll ones. Finance dashboards need to be restricted to the finance team.
+
+Ines: We still need the data catalog documenting every table and its owner. People keep asking us which table to use.
+
+Victor: Schema change alerts are almost done, by the way — the Slack notification when an upstream table changes. Should ship this week.
+
+Ines: Data quality: the row-count checks all passed last week, but the revenue table had duplicate rows and the numbers were inflated for two days. Row counts aren't enough. We should add uniqueness checks on primary keys after every load.
+
+Leila: Marketing keeps emailing us spreadsheets to load. Can we give them a self-serve CSV upload so they can add their own reference data?
+
+Victor: Maybe someday we should evaluate moving from Redshift to Snowflake, but definitely not this quarter. Just something to keep in mind.
+
+Hana: Okay. To recap: streaming for orders, retention and email hashing for compliance, finance dashboard access, primary-key checks, and the CSV upload. I'll put these in order of priority and we'll size them next week.

@@ -1,0 +1,12 @@
+[
+  {"id": "FIT-301", "title": "Workout logging", "description": "Users log sets and reps for each exercise manually.", "status": "done", "tags": ["workouts"]},
+  {"id": "FIT-302", "title": "Daily reminder notification", "description": "Send a daily reminder push notification at 8am local time.", "status": "done", "tags": ["notifications"]},
+  {"id": "FIT-303", "title": "Saving workouts", "description": "Workouts are saved directly to the server; the app shows an error if there is no connection.", "status": "done", "tags": ["workouts", "sync"]},
+  {"id": "FIT-304", "title": "Apple Health export", "description": "Export completed workouts to Apple Health.", "status": "open", "tags": ["ios", "integrations"]},
+  {"id": "FIT-305", "title": "Email login", "description": "Users sign in with email and password.", "status": "done", "tags": ["auth"]},
+  {"id": "FIT-306", "title": "Dark mode", "description": "Add a dark theme that follows the system setting.", "status": "in_progress", "tags": ["ui"]},
+  {"id": "FIT-307", "title": "Progress charts", "description": "Weekly training volume chart covering the last four weeks.", "status": "done", "tags": ["charts"]},
+  {"id": "FIT-308", "title": "Android home-screen widget", "description": "Widget showing today's planned workout.", "status": "open", "tags": ["android"]},
+  {"id": "FIT-309", "title": "Subscription", "description": "Monthly subscription at $9.99 through App Store and Google Play billing.", "status": "done", "tags": ["billing"]},
+  {"id": "FIT-310", "title": "Crash reporting", "description": "Sentry crash reporting in production builds.", "status": "done", "tags": ["monitoring"]}
+]

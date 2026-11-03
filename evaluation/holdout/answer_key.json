@@ -1,0 +1,56 @@
+{
+  "description": "Held-out test set: three meetings in domains the pipeline was never tuned on. Labels were written and reviewed before any run. For each piece of work: 'story' says whether it should become a story; 'tickets' lists acceptable linked tickets (null = no link); 'link_types' the acceptable link types; 'conflict' is must / allowed / no (whether it should reach conflict review); 'resolutions' the acceptable conflict resolutions.",
+  "meetings": [
+    {
+      "id": "checkout",
+      "transcript": "evaluation/holdout/checkout_meeting.txt",
+      "backlog": "evaluation/holdout/checkout_backlog.json",
+      "work": [
+        {"id": "inventory-holds", "what": "Oversold stock; reserve at add-to-cart with a 15-minute hold (pain + fix)", "story": true, "tickets": ["CHK-209"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "carrier-shipping", "what": "Replace flat $5.99 with UPS/FedEx rates by weight and zone", "story": true, "tickets": ["CHK-205"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "address-validation", "what": "8% undeliverable; structured address fields with Google Places validation (pain + fix)", "story": true, "tickets": ["CHK-207"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "email-delays", "what": "Confirmation emails 20 minutes late at peak (bug report)", "story": true, "tickets": ["CHK-203"], "link_types": ["relates_to"], "conflict": "no"},
+        {"id": "stacking-promos", "what": "Allow two promo codes per order, with stacking rules", "story": true, "tickets": ["CHK-206"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "klarna", "what": "Add Klarna buy-now-pay-later", "story": true, "tickets": [null, "CHK-202"], "link_types": [null, "relates_to", "alongside"], "conflict": "allowed", "resolutions": ["keep_both"]},
+        {"id": "conversion-alert", "what": "Alert when cart-to-payment conversion drops below 30%", "story": true, "tickets": [null, "CHK-208"], "link_types": [null, "relates_to", "alongside"], "conflict": "allowed", "resolutions": ["keep_both"]},
+        {"id": "apple-pay", "what": "Apple Pay on iOS Safari (already CHK-204)", "story": false, "why": "duplicate"},
+        {"id": "guest-checkout-praise", "what": "Guest checkout worked well", "story": false, "why": "not a requirement"},
+        {"id": "agenda-recap", "what": "Agenda, recap, estimate on Thursday", "story": false, "why": "meeting talk"}
+      ]
+    },
+    {
+      "id": "fitness",
+      "transcript": "evaluation/holdout/fitness_meeting.txt",
+      "backlog": "evaluation/holdout/fitness_backlog.json",
+      "work": [
+        {"id": "offline-save", "what": "Workouts lost with no signal; save on device and sync later (pain + fix)", "story": true, "tickets": ["FIT-303"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "reminder-time", "what": "Let users choose their reminder time instead of 8am", "story": true, "tickets": ["FIT-302"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "chart-timezone-bug", "what": "Workouts after midnight counted on the wrong day (bug)", "story": true, "tickets": ["FIT-307"], "link_types": ["relates_to"], "conflict": "no"},
+        {"id": "yearly-view", "what": "Add a yearly progress view next to the weekly chart", "story": true, "tickets": ["FIT-307"], "link_types": ["relates_to", "alongside"], "conflict": "allowed", "resolutions": ["keep_both"]},
+        {"id": "sign-in-with-apple", "what": "Add Sign in with Apple", "story": true, "tickets": [null, "FIT-305"], "link_types": [null, "relates_to", "alongside"], "conflict": "allowed", "resolutions": ["keep_both"]},
+        {"id": "annual-plan", "what": "Annual subscription at $59.99 alongside monthly", "story": true, "tickets": ["FIT-309"], "link_types": ["relates_to", "alongside"], "conflict": "allowed", "resolutions": ["keep_both"]},
+        {"id": "rest-timer", "what": "Rest timer between sets that vibrates", "story": true, "tickets": [null, "FIT-301"], "link_types": [null, "relates_to"], "conflict": "no"},
+        {"id": "dark-mode", "what": "Dark mode following the system setting (already FIT-306)", "story": false, "why": "duplicate"},
+        {"id": "apple-health", "what": "Push workouts to Apple Health (already FIT-304)", "story": false, "why": "duplicate"},
+        {"id": "agenda", "what": "Note-taker, prioritize in Linear tomorrow", "story": false, "why": "meeting talk"}
+      ]
+    },
+    {
+      "id": "data_platform",
+      "transcript": "evaluation/holdout/data_platform_meeting.txt",
+      "backlog": "evaluation/holdout/data_platform_backlog.json",
+      "work": [
+        {"id": "streaming-orders", "what": "Dashboards a day stale; stream orders and payments via CDC in ~5 minutes (pain + fix)", "story": true, "tickets": ["DATA-401"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "retention-13-months", "what": "Keep raw events 13 months, not 30 days", "story": true, "tickets": ["DATA-403"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "email-hashing", "what": "Hash or tokenize emails before the warehouse", "story": true, "tickets": ["DATA-408"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "finance-dashboard-access", "what": "Restrict finance dashboards to the finance team", "story": true, "tickets": ["DATA-405"], "link_types": ["replaces"], "conflict": "must", "resolutions": ["meeting_wins"]},
+        {"id": "pk-uniqueness-checks", "what": "Duplicate revenue rows passed row counts; add primary-key uniqueness checks (pain + fix)", "story": true, "tickets": ["DATA-410"], "link_types": ["relates_to", "alongside"], "conflict": "allowed", "resolutions": ["keep_both"]},
+        {"id": "csv-upload", "what": "Self-serve CSV upload for marketing reference data", "story": true, "tickets": [null], "link_types": [null], "conflict": "no"},
+        {"id": "data-catalog", "what": "Data catalog of tables and owners (already DATA-404)", "story": false, "why": "duplicate"},
+        {"id": "schema-alerts", "what": "Schema change Slack alerts (already DATA-406)", "story": false, "why": "duplicate"},
+        {"id": "snowflake-someday", "what": "Maybe evaluate Snowflake someday, not this quarter", "story": false, "why": "tentative idea"},
+        {"id": "agenda-recap", "what": "Agenda, recap, size next week", "story": false, "why": "meeting talk"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+Checkout Team — Black Friday Retro and Sprint Planning
+Date: 2026-12-02
+Attendees: Maya (PM), Diego (Tech Lead), Lin (Backend), Omar (Frontend), Grace (Support Lead)
+
+---
+
+Maya: Okay, let's get started. First the Black Friday retro, then we plan the next sprint. We have about forty minutes.
+
+Grace: The biggest support problem by far was oversold items. We sold forty units of the winter jacket that we didn't have. Customers paid, and then we had to cancel and refund them.
+
+Lin: That's because we only reserve stock once the payment goes through. Two people can have the last jacket in their carts at the same time. We should reserve stock as soon as an item is added to the cart and hold it for fifteen minutes.
+
+Diego: Agreed, the hold should release automatically if they don't finish checkout.
+
+Maya: Next, shipping. We're losing money on heavy orders. The flat $5.99 for every domestic order doesn't work anymore. Furniture orders cost us forty dollars to ship.
+
+Diego: We should replace the flat rate with real carrier rates calculated from weight and destination zone, using the UPS and FedEx rate APIs.
+
+Grace: Another thing from support: about eight percent of orders came back undeliverable because of bad addresses. People type the whole address on one line and get the apartment number or the zip code wrong.
+
+Omar: I'd split the address into proper fields — street, unit, city, state, zip — and add autocomplete with validation through Google Places so we catch bad addresses before the order is placed.
+
+Maya: Good. What about the order confirmation emails? I heard complaints.
+
+Grace: During the sale, confirmation emails were arriving twenty minutes late. People thought their order hadn't gone through and some ordered twice.
+
+Lin: The emails are fine normally, it's the volume. The send queue backs up at peak. We need to look at that before the next sale.
+
+Maya: On promo codes — marketing wants customers to be able to combine a promo code with a second promo code, like a free-shipping code plus a percentage discount. Right now it's strictly one code per order.
+
+Diego: That's doable, but we'll need rules about which codes can stack.
+
+Omar: Also, Apple Pay. We still need Apple Pay on iOS Safari, that's been waiting for a while.
+
+Maya: Yes, that one's still important. And one new payment request: a lot of customers asked for buy-now-pay-later. Let's add Klarna as a payment option at checkout.
+
+Diego: For the analytics dashboard we're building, can we add an alert when the cart-to-payment conversion drops below thirty percent? We'd have caught the inventory issue much earlier.
+
+Grace: Guest checkout worked really well, by the way. No complaints there at all.
+
+Maya: Great to hear. To recap the priorities: inventory holds, carrier shipping rates, address validation, and Klarna. Let's estimate all of these on Thursday and pick the sprint scope then.

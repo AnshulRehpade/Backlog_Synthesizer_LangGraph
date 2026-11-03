@@ -1,0 +1,12 @@
+[
+  {"id": "DATA-401", "title": "Nightly ETL", "description": "Batch ETL from the production Postgres database to the warehouse every night at 2am.", "status": "done", "tags": ["etl"]},
+  {"id": "DATA-402", "title": "Analytics warehouse", "description": "The analytics warehouse runs on Amazon Redshift.", "status": "done", "tags": ["warehouse"]},
+  {"id": "DATA-403", "title": "Raw data retention", "description": "Keep raw event data for 30 days, then delete it.", "status": "done", "tags": ["retention"]},
+  {"id": "DATA-404", "title": "Data catalog", "description": "Document every warehouse table and its owner in a data catalog.", "status": "open", "tags": ["docs"]},
+  {"id": "DATA-405", "title": "Dashboard access", "description": "All employees can view all Looker dashboards.", "status": "done", "tags": ["looker", "access"]},
+  {"id": "DATA-406", "title": "Schema change alerts", "description": "Notify the data team in Slack when an upstream table's schema changes.", "status": "in_progress", "tags": ["alerts"]},
+  {"id": "DATA-407", "title": "dbt transformations", "description": "Transformations are defined as dbt models and run after the nightly ETL.", "status": "done", "tags": ["dbt"]},
+  {"id": "DATA-408", "title": "Events table", "description": "Product events table including user_id, event name, timestamp and customer email address in plain text.", "status": "done", "tags": ["events"]},
+  {"id": "DATA-409", "title": "Warehouse cost report", "description": "Weekly report of warehouse spend by team.", "status": "open", "tags": ["cost"]},
+  {"id": "DATA-410", "title": "Data quality checks", "description": "Row-count checks on core tables after each load.", "status": "done", "tags": ["quality"]}
+]

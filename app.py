@@ -483,7 +483,8 @@ if run_clicked and transcript_text.strip():
             if gap_out is not None:
                 step_gap.update(
                     label=(
-                        f"✅ Gap Detection — {gap_out.total_new} new, "
+                        f"✅ Gap Detection — {gap_out.total_new} new, {gap_out.total_related} related, "
+                        f"{gap_out.total_conflicts} conflict, "
                         f"{gap_out.total_duplicates} dup ({node_timings[node_name]:.1f}s)"
                     ),
                     state="complete",
@@ -613,23 +614,29 @@ if "result" in st.session_state and st.session_state["result"] is not None:
             "keep_both": "Keep both",
         }
         choices = {}
+        keys = list(options)
+        by_ticket: dict[str, list[dict]] = {}
         for c in review["conflicts"]:
+            by_ticket.setdefault(c["ticket_id"], []).append(c)
+        for ticket_id, group in by_ticket.items():
+            # One box per ticket, so every decision about it is made side by side.
+            first = group[0]
             with st.container(border=True):
-                st.markdown(f"**Meeting:** {c['item']}")
                 st.markdown(
-                    f"**Ticket {c['ticket_id']}** ({c['ticket_status'] or 'unknown status'}): "
-                    f"{c['ticket_title']} — {c['ticket_description']}"
+                    f"**Ticket {ticket_id}** ({first['ticket_status'] or 'unknown status'}): "
+                    f"{first['ticket_title']} — {first['ticket_description']}"
                 )
-                st.caption(f"Why it conflicts: {c['reason']}")
-                keys = list(options)
-                choices[str(c["index"])] = st.radio(
-                    "Decision",
-                    keys,
-                    index=keys.index(c["suggestion"]) if c["suggestion"] in keys else 0,
-                    format_func=lambda k, s=c["suggestion"]: labels.get(k, k) + (" (suggested)" if k == s else ""),
-                    horizontal=True,
-                    key=f"cr_{c['index']}",
-                )
+                for c in group:
+                    st.markdown(f"**Meeting:** {c['item']}")
+                    st.caption(f"Why it conflicts: {c['reason']}")
+                    choices[str(c["index"])] = st.radio(
+                        "Decision",
+                        keys,
+                        index=keys.index(c["suggestion"]) if c["suggestion"] in keys else 0,
+                        format_func=lambda k, s=c["suggestion"]: labels.get(k, k) + (" (suggested)" if k == s else ""),
+                        horizontal=True,
+                        key=f"cr_{c['index']}",
+                    )
         cr_col1, cr_col2 = st.columns(2)
         decision = None
         if cr_col1.button("✅ Accept all suggestions", key="cr_accept_all", type="primary"):

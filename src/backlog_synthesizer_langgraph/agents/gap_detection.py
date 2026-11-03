@@ -38,13 +38,17 @@ logger = logging.getLogger(__name__)
 
 _VERIFY_SYSTEM_PROMPT = (
     "You compare a requirement from a meeting against an existing backlog ticket. "
-    "Answer with JSON only: {\"verdict\": \"duplicate\" | \"conflict\" | \"unrelated\", "
-    "\"reason\": \"<one sentence>\"}.\n"
+    "Answer with JSON only: {\"verdict\": \"duplicate\" | \"conflict\" | \"related\" | "
+    "\"unrelated\", \"reason\": \"<one sentence>\"}.\n"
     "- duplicate: the requirement asks for the same thing the ticket already covers, "
     "even if worded differently.\n"
-    "- conflict: same area, but the requirement contradicts, replaces, or changes the "
-    "ticket's scope, constraints, or approach (e.g. different limits, sync vs async, "
-    "one technology instead of another).\n"
+    "- conflict: building the requirement would change or contradict something the "
+    "ticket specifies, so a product manager must decide which version stands (e.g. "
+    "different limits, async instead of sync, mobile instead of desktop-only, one "
+    "technology or provider instead of the one the ticket names).\n"
+    "- related: same area as the ticket without contradicting what it specifies: "
+    "follow-on work, an addition next to it, or a report that the ticket's feature "
+    "is broken or not good enough.\n"
     "- unrelated: a different piece of work that merely shares vocabulary.\n"
     "For a conflict, also answer two questions as booleans:\n"
     "- \"is_product_work\": is the requirement something to build or change in the "
@@ -58,7 +62,7 @@ _VERIFY_SYSTEM_PROMPT = (
     "its work already exists."
 )
 
-_VERDICTS = {"duplicate", "conflict", "unrelated"}
+_VERDICTS = {"duplicate", "conflict", "related", "unrelated"}
 # ConflictFlag.similarity_score is validated to this range.
 _CONFLICT_SCORE_MIN, _CONFLICT_SCORE_MAX = 0.50, 0.85
 
@@ -73,6 +77,11 @@ class GapDetectionAgent:
     - CONFLICT: Similar but contradictory (conflict_threshold <= score < duplicate_threshold)
     - DUPLICATE: Very similar to existing ticket (score >= duplicate_threshold)
 
+    With an LLM tool, any match scoring at least verify_threshold (lower than
+    conflict_threshold) goes to the judge, which can also answer RELATED: same
+    area as the ticket without contradicting it. Contradictions often score low,
+    because the contradicted detail is a small part of the ticket's text.
+
     Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
     """
 
@@ -83,6 +92,7 @@ class GapDetectionAgent:
         conflict_threshold: float = 0.50,
         llm_tool: LLMGenerationTool | None = None,
         ticket_ids: list[str] | None = None,
+        verify_threshold: float = 0.30,
     ) -> None:
         """Initialize GapDetectionAgent with dependencies.
 
@@ -94,12 +104,15 @@ class GapDetectionAgent:
             ticket_ids: If given, only these backlog tickets can be matched. Memory also
                 holds items from earlier runs and other backlogs, which are not tickets
                 in the backlog being analyzed.
+            verify_threshold: With an LLM tool, matches at or above this score are
+                judged by the LLM. Without one, conflict_threshold applies.
         """
         self._memory = long_term_memory
         self._duplicate_threshold = duplicate_threshold
         self._conflict_threshold = conflict_threshold
         self._llm_tool = llm_tool
         self._ticket_ids = ticket_ids
+        self._verify_threshold = min(verify_threshold, conflict_threshold)
 
     async def analyze_gaps(
         self,
@@ -133,6 +146,7 @@ class GapDetectionAgent:
         total_new = sum(1 for e in entries if e.classification == "new")
         total_duplicates = sum(1 for e in entries if e.classification == "duplicate")
         total_conflicts = sum(1 for e in entries if e.classification == "conflict")
+        total_related = sum(1 for e in entries if e.classification == "related")
         total_unprocessed = sum(1 for e in entries if e.classification == "unprocessed")
 
         return GapReport(
@@ -140,6 +154,7 @@ class GapDetectionAgent:
             total_new=total_new,
             total_duplicates=total_duplicates,
             total_conflicts=total_conflicts,
+            total_related=total_related,
             total_unprocessed=total_unprocessed,
         )
 
@@ -189,8 +204,9 @@ class GapDetectionAgent:
         best_match = results[0]
         score = best_match.score
 
-        if score < self._conflict_threshold:
-            # NEW — below conflict threshold
+        gate = self._verify_threshold if self._llm_tool is not None else self._conflict_threshold
+        if score < gate:
+            # NEW — not similar enough to any ticket to be worth judging
             return self._new_entry(item, score)
 
         # Embedding similarity can't tell agreement from contradiction, so let the
@@ -202,8 +218,12 @@ class GapDetectionAgent:
             return self._duplicate_entry(item, best_match, score)
         if verdict == "conflict":
             return self._conflict_entry(item, best_match, score, reason, suggestion)
+        if verdict == "related":
+            return self._related_entry(item, best_match, score, reason)
 
         # No verdict (no LLM tool, or the call failed) — fall back to thresholds.
+        if score < self._conflict_threshold:
+            return self._new_entry(item, score)
         if score >= self._duplicate_threshold:
             return self._duplicate_entry(item, best_match, score)
         return self._conflict_entry(
@@ -222,6 +242,20 @@ class GapDetectionAgent:
             gap_type="NEW",
             confidence=0.9,
             similarity_score=score,
+        )
+
+    @staticmethod
+    def _related_entry(
+        item: ExtractedItem, match: SearchResult, score: float, relation: str
+    ) -> GapReportEntry:
+        return GapReportEntry(
+            item=item,
+            classification="related",
+            gap_type="RELATED",
+            confidence=0.85,
+            similarity_score=score,
+            similar_ticket_id=match.item_id,
+            relation=relation,
         )
 
     @staticmethod

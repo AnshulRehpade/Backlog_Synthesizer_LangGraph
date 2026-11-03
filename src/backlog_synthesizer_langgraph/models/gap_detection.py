@@ -37,14 +37,16 @@ class GapReportEntry(BaseModel):
     """A single entry in the gap report classifying an extracted item."""
 
     item: ExtractedItem
-    classification: str  # "new", "duplicate", "conflict", "unprocessed"
-    gap_type: str = "new"  # "DUPLICATE", "CONFLICT", "NEW", "UNPROCESSED"
+    classification: str  # "new", "duplicate", "conflict", "related", "unprocessed"
+    gap_type: str = "new"  # "DUPLICATE", "CONFLICT", "RELATED", "NEW", "UNPROCESSED"
     confidence: float = Field(ge=0.0, le=1.0)
     similarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
     similar_ticket_id: str | None = None
     duplicate_info: DuplicateFlag | None = None
     conflict_info: ConflictFlag | None = None
     error_reason: str | None = None  # for unprocessed items
+    # For related items: how the item relates to similar_ticket_id (follow-on, addition, bug).
+    relation: str | None = None
 
 
 class GapReport(BaseModel):
@@ -55,3 +57,5 @@ class GapReport(BaseModel):
     total_duplicates: int
     total_conflicts: int
     total_unprocessed: int
+    # Items in the same area as a ticket that don't contradict it (no review needed).
+    total_related: int = 0

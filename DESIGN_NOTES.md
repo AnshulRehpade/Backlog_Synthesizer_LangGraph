@@ -19,7 +19,7 @@ Product managers and engineering leads lose hours after every planning meeting t
 - **Memory and RAG:**
   - *Short-term:* LangGraph checkpointer (MemorySaver for dev, SqliteSaver for persistence). It saves state after every node and enables resume and time-travel debugging.
   - *Long-term:* a ChromaDB vector store.
-  - *Retrieval:* Gap Detection uses semantic search over the tickets in the current backlog. Any match with a similarity of 0.50 or higher goes to an LLM check (temperature 0) that labels it duplicate, conflict or unrelated with a one-sentence reason, because embeddings measure topic, not agreement. If that call fails, the 0.80 duplicate / 0.50 conflict thresholds decide.
+  - *Retrieval:* Gap Detection uses semantic search over the tickets in the current backlog. Any match with a similarity of 0.30 or higher goes to an LLM check (temperature 0) that labels it duplicate, conflict, related or unrelated with a one-sentence reason, because embeddings measure topic, not agreement; contradictions often score low because the contradicted detail is a small part of the ticket. Only conflicts go to human review; related items (follow-on work, additions, bug reports) get stories linked to their ticket. If the LLM call fails, the 0.80 duplicate / 0.50 conflict thresholds decide. `evaluation/run_gap_eval.py` scores this item by item on 20 labeled items from the sample meeting.
   - *Audit log:* a chronological record of every invocation.
 - **Observability:** OpenTelemetry tracing, plus optional LangSmith tracing (`LANGCHAIN_TRACING_V2`).
 
@@ -35,7 +35,7 @@ The original version made a ReAct-style LLM call at every decision point, five p
 
 ## How I tested and evaluated it
 
-- **Tests:** 183 pytest tests across 13 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A coverage threshold is enforced in `pyproject.toml`. The original version had 554 tests at 81% coverage and cost about $0.009 per run.
+- **Tests:** 191 pytest tests across 13 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A coverage threshold is enforced in `pyproject.toml`. The original version had 554 tests at 81% coverage and cost about $0.009 per run.
 - **Evaluation harness** (`evaluation/run_eval.py`): runs the full graph against a golden dataset of 5 scenarios, each with expected story, duplicate and conflict counts. It reports the per-scenario result and the keyword overlap between the transcript and the generated stories (mean, min, max and standard deviation).
 - **Honest limitations:** five scenarios is a small set, and keyword overlap is only a rough proxy for story quality. My next step would be an LLM-as-judge rubric (completeness, faithfulness, acceptance-criteria quality) run as a LangSmith experiment over a larger dataset.
 

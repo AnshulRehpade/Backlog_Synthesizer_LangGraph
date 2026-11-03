@@ -68,6 +68,9 @@ class PipelineConfig:
     # Gap detection thresholds
     gap_detection_duplicate_threshold: float = 0.80
     gap_detection_conflict_threshold: float = 0.50
+    # With an LLM judge, matches at or above this score are judged (contradictions
+    # often score low because the contradicted detail is a small part of the ticket)
+    gap_detection_verify_threshold: float = 0.30
 
     # ReAct reasoning
     react_reasoning_enabled: bool = True
@@ -166,6 +169,10 @@ class PipelineConfig:
         if gap_conflict_threshold:
             env_values["gap_detection_conflict_threshold"] = float(gap_conflict_threshold)
 
+        gap_verify_threshold = os.environ.get("GAP_DETECTION_VERIFY_THRESHOLD")
+        if gap_verify_threshold:
+            env_values["gap_detection_verify_threshold"] = float(gap_verify_threshold)
+
         react_enabled = os.environ.get("REACT_REASONING_ENABLED")
         if react_enabled is not None:
             env_values["react_reasoning_enabled"] = react_enabled.lower() in ("true", "1", "yes")
@@ -240,6 +247,7 @@ class PipelineConfig:
             "chroma_persist_dir",
             "gap_detection_duplicate_threshold",
             "gap_detection_conflict_threshold",
+            "gap_detection_verify_threshold",
             "react_reasoning_enabled",
             "tokenizer_model",
             "otel_enabled",

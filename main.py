@@ -197,12 +197,15 @@ _RESOLUTION_KEYS = {"m": "meeting_wins", "k": "keep_ticket", "b": "keep_both"}
 def _prompt_conflicts(review: dict) -> str | dict:
     """Show every conflict with its suggestion; one keypress accepts them all."""
     print(f"\n⚖️  {review.get('message', 'Conflicts need a decision')}")
-    for c in review.get("conflicts", []):
-        print(f"\n  [{c['index']}] Meeting: {c['item']}")
-        print(f"      Ticket {c['ticket_id']} ({c['ticket_status'] or '?'}): "
-              f"{c['ticket_title']} — {c['ticket_description']}")
-        print(f"      Why: {c['reason']}")
-        print(f"      Suggested: {c['suggestion']}")
+    last_ticket = None
+    for c in review.get("conflicts", []):  # grouped by ticket
+        if c["ticket_id"] != last_ticket:
+            print(f"\n  Ticket {c['ticket_id']} ({c['ticket_status'] or '?'}): "
+                  f"{c['ticket_title']} — {c['ticket_description']}")
+            last_ticket = c["ticket_id"]
+        print(f"    [{c['index']}] Meeting: {c['item']}")
+        print(f"        Why: {c['reason']}")
+        print(f"        Suggested: {c['suggestion']}")
     if not sys.stdin.isatty():
         print("No terminal attached — accepting all suggestions.")
         return "accept_all"

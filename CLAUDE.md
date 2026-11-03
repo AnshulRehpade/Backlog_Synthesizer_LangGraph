@@ -85,6 +85,12 @@ The judge derives the suggestion from two yes/no answers (`is_product_work`,
 `replaces_ticket`). The eval turns review off. Suggestion quality is measured by
 `evaluation/run_suggestion_eval.py` on `evaluation/conflict_suggestions.json`.
 
+Gap detection's judge sees every match scoring at least `GAP_DETECTION_VERIFY_THRESHOLD`
+(0.30) and answers duplicate / conflict / related / unrelated. Only conflicts reach review;
+`related` items get stories linked to `similar_ticket_id`. With review off, the judge's
+suggested resolution is applied. `evaluation/run_gap_eval.py` scores verdicts, conflicts
+caught, false alarms, tickets and resolutions on `evaluation/gap_labels.json`.
+
 ### route_after_parser Logic
 
 ```

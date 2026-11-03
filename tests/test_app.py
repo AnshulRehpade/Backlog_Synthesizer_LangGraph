@@ -101,6 +101,7 @@ async def test_run_pipeline_returns_correct_state_structure():
         g_config.create_vector_search_tool.return_value = mock_vector
         g_config.gap_detection_duplicate_threshold = 0.80
         g_config.gap_detection_conflict_threshold = 0.50
+        g_config.gap_detection_verify_threshold = 0.30
         mock_g_cfg.from_env.return_value = g_config
 
         # Story writer config
@@ -217,6 +218,7 @@ async def test_run_pipeline_with_backlog_tickets():
         g_config.create_vector_search_tool.return_value = mock_vector
         g_config.gap_detection_duplicate_threshold = 0.80
         g_config.gap_detection_conflict_threshold = 0.50
+        g_config.gap_detection_verify_threshold = 0.30
         mock_g_cfg.from_env.return_value = g_config
 
         sw_llm = MagicMock()

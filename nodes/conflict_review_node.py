@@ -40,7 +40,11 @@ async def conflict_review_node(state: PipelineState) -> PipelineState:
     request = {
         "kind": "conflict_review",
         "message": f"{len(pending)} conflict{'s' if len(pending) != 1 else ''} need a decision",
-        "conflicts": [_describe(i, gap_output.entries[i], tickets) for i in pending],
+        # Grouped by ticket so every decision about one ticket is made together.
+        "conflicts": sorted(
+            (_describe(i, gap_output.entries[i], tickets) for i in pending),
+            key=lambda c: (c["ticket_id"], c["index"]),
+        ),
         "options": dict(RESOLUTIONS),
     }
 

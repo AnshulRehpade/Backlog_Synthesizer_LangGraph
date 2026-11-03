@@ -153,12 +153,13 @@ def route_after_gap_detection(state: PipelineState) -> str:
         return "error_node"
 
     # Compute totals
-    new_count = gap_output.total_new
+    # Related items get stories just like new ones.
+    new_count = gap_output.total_new + gap_output.total_related
     conflict_count = gap_output.total_conflicts
     duplicate_count = gap_output.total_duplicates
     total_items = len(gap_output.entries)
 
-    # Check: all items are duplicates (new + conflict == 0)
+    # Check: all items are duplicates (new + related + conflict == 0)
     if new_count == 0 and conflict_count == 0:
         retry_count = state.get("retry_count", 0)
         if retry_count >= 1:

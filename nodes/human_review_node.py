@@ -251,7 +251,7 @@ def _build_review_summary(state: PipelineState) -> str:
     gap_output = state.get("gap_output")
     if gap_output is not None:
         lines.append(
-            f"Gap analysis: {gap_output.total_new} new, "
+            f"Gap analysis: {gap_output.total_new} new, {gap_output.total_related} related, "
             f"{gap_output.total_duplicates} duplicates, "
             f"{gap_output.total_conflicts} conflicts"
         )

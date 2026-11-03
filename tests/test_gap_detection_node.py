@@ -196,6 +196,7 @@ async def test_gap_detection_node_reads_parser_output():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         result = await gap_detection_node(state)
@@ -222,6 +223,7 @@ async def test_gap_detection_node_writes_gap_output():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         result = await gap_detection_node(state)
@@ -249,6 +251,7 @@ async def test_gap_detection_node_updates_current_step():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         result = await gap_detection_node(state)
@@ -278,6 +281,7 @@ async def test_backlog_tickets_loaded_into_memory():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         await gap_detection_node(state)
@@ -316,6 +320,7 @@ async def test_extracted_items_stored_after_gap_detection():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         await gap_detection_node(state)
@@ -350,6 +355,7 @@ async def test_purge_expired_called():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         mock_ltm = MagicMock()
@@ -391,6 +397,7 @@ async def test_otel_span_recorded():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         await gap_detection_node(state)
@@ -429,6 +436,7 @@ async def test_audit_log_entry_created():
         mock_config.create_vector_search_tool.return_value = mock_vector
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         await gap_detection_node(state)

@@ -323,7 +323,7 @@ def _build_observation(state: PipelineState, current_step: str) -> str:
     gap_output = state.get("gap_output")
     if gap_output is not None:
         lines.append(
-            f"gap_report: new={gap_output.total_new}, "
+            f"gap_report: new={gap_output.total_new}, related={gap_output.total_related}, "
             f"duplicates={gap_output.total_duplicates}, "
             f"conflicts={gap_output.total_conflicts}"
         )

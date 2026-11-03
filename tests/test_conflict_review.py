@@ -262,3 +262,48 @@ def test_ui_apply_my_choices(paused_app):
     app.radio(key="cr_1").set_value("keep_ticket")
     app.button(key="cr_apply").click().run()
     assert _resolutions(fakes.story_writer_inputs[0])[1] == "keep_ticket"
+
+
+# ─── Related items, suggestions without a reviewer, grouping ──────
+
+
+async def test_no_reviewer_means_the_suggestion_stands():
+    """With review off, a keep_ticket suggestion still means no story."""
+    agent, llm = _story_writer()
+    unreviewed = _conflict("Maybe dark mode someday", "T-3", "keep_ticket")
+    assert await agent.generate_stories([unreviewed]) == []
+    llm.generate.assert_not_called()
+
+
+async def test_related_item_gets_a_story_linked_to_its_ticket():
+    agent, llm = _story_writer()
+    related = GapDetectionAgent._related_entry(
+        _make_extracted_item("CSV export times out"), SearchResult("T-1", 0.6), 0.6, "Bug report"
+    )
+    stories = await agent.generate_stories([related])
+    assert len(stories) == 1
+    prompt = llm.generate.call_args.args[0]
+    assert "builds on existing ticket 'T-1'" in prompt and "Bug report" in prompt
+
+
+async def test_review_groups_conflicts_by_ticket():
+    entries = [
+        _conflict("Async CSV", "T-2", "meeting_wins"),
+        _conflict("SSO", "T-1", "keep_both"),
+        _conflict("CSV progress bar", "T-2", "meeting_wins"),
+    ]
+    report = GapReport(entries=entries, total_new=0, total_duplicates=0, total_conflicts=3, total_unprocessed=0)
+    state = _make_state(gap_output=report, inputs=_inputs())
+    with patch("nodes.conflict_review_node.interrupt", return_value="accept_all") as fake:
+        await conflict_review_node(state)
+    request = fake.call_args.args[0]
+    assert [(c["ticket_id"], c["index"]) for c in request["conflicts"]] == [("T-1", 1), ("T-2", 0), ("T-2", 2)]
+
+
+def test_routing_counts_related_items_as_work():
+    from graph.routing import route_after_gap_detection
+
+    related = GapDetectionAgent._related_entry(_make_extracted_item(), SearchResult("T-1", 0.6), 0.6, "r")
+    report = GapReport(entries=[related], total_new=0, total_duplicates=0, total_conflicts=0,
+                       total_unprocessed=0, total_related=1)
+    assert route_after_gap_detection(_make_state(gap_output=report)) == "story_writer"

@@ -8,8 +8,8 @@ it was flagged against, and the acceptable resolutions. The real judge (gap
 detection's LLM check, temperature 0) is asked about each pair.
 
 Scoring is by outcome: if the judge changes the verdict instead of suggesting a
-resolution, "duplicate" counts as keep_ticket (no story) and "unrelated" as
-keep_both (a story is written alongside the ticket).
+resolution, "duplicate" counts as keep_ticket (no story), and "related" and
+"unrelated" as keep_both (a story is written alongside the ticket).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from backlog_synthesizer_langgraph.models.extraction import ExtractedItem
 from backlog_synthesizer_langgraph.tools.interfaces import SearchResult
 
 DATASET = Path("evaluation/conflict_suggestions.json")
-_OUTCOME_OF_VERDICT = {"duplicate": "keep_ticket", "new": "keep_both"}
+_OUTCOME_OF_VERDICT = {"duplicate": "keep_ticket", "new": "keep_both", "related": "keep_both"}
 
 
 async def _judge(agent_llm, case: dict) -> tuple[str, str]:

@@ -60,7 +60,7 @@ class SerializationResult:
 
 
 # Classifications eligible for story generation
-ELIGIBLE_CLASSIFICATIONS = ("new", "conflict")
+ELIGIBLE_CLASSIFICATIONS = ("new", "conflict", "related")
 
 SYSTEM_PROMPT = (
     "You are a product manager assistant that converts extracted information "
@@ -127,9 +127,21 @@ def _has_insufficient_detail(item: ExtractedItem) -> bool:
     return len(item.text.strip()) < 10 or item.confidence < MIN_ITEM_CONFIDENCE
 
 
+def _resolution(entry: GapReportEntry) -> str | None:
+    """How a conflict is settled: the reviewer's decision, else the judge's suggestion.
+
+    With review off (or no one at the keyboard) there's no decision, and the
+    suggestion stands in for it.
+    """
+    info = entry.conflict_info
+    if info is None:
+        return None
+    return info.resolution or info.suggested_resolution
+
+
 def _kept_ticket(entry: GapReportEntry) -> bool:
-    """A reviewer chose to keep the existing ticket, so the item gets no story."""
-    return entry.conflict_info is not None and entry.conflict_info.resolution == "keep_ticket"
+    """The existing ticket stands, so the item gets no story."""
+    return _resolution(entry) == "keep_ticket"
 
 
 def _create_placeholder_story(item: ExtractedItem) -> UserStory:
@@ -333,13 +345,23 @@ class StoryWriterAgent:
         # Build prompt and call LLM
         prompt = _build_prompt(item)
 
+        # Related items build on a ticket without changing it; say which one.
+        if entry.classification == "related" and entry.similar_ticket_id:
+            prompt = (
+                "\n\n## Related ticket:\n"
+                f"This item builds on existing ticket '{entry.similar_ticket_id}' without "
+                f"changing it: {entry.relation or 'same area'}\n"
+                "Write the story as follow-on work or a fix for that ticket and mention "
+                "the ticket in the story.\n"
+            ) + prompt
+
         # Inject conflict context if this is a CONFLICT entry
         if entry.classification == "conflict" and entry.conflict_info is not None:
             info = entry.conflict_info
-            if info.resolution == "keep_both":
-                # A reviewer decided the ticket stands and this item is added beside it.
+            if _resolution(entry) == "keep_both":
+                # The ticket stands and this item is added beside it.
                 framing = (
-                    "A reviewer decided BOTH should exist. Write the story as an addition "
+                    "BOTH should exist. Write the story as an addition "
                     "alongside the existing ticket, not a replacement, and do not deprecate "
                     "the ticket's behavior.\n"
                 )

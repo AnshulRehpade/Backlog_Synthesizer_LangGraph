@@ -573,6 +573,7 @@ async def test_lower_threshold_sets_override_for_retry(override, expected):
         mock_config.create_llm_tool.return_value = mock_llm
         mock_config.gap_detection_duplicate_threshold = 0.80
         mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config.gap_detection_verify_threshold = 0.30
         mock_config_cls.from_env.return_value = mock_config
 
         result = await llm_fallback_node(state)

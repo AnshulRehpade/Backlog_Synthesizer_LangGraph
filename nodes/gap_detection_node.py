@@ -286,6 +286,7 @@ async def _execute_gap_detection(
         conflict_threshold=config.gap_detection_conflict_threshold,
         llm_tool=llm_tool,
         ticket_ids=[ticket.id for ticket in backlog_tickets],
+        verify_threshold=config.gap_detection_verify_threshold,
     )
 
     try:
@@ -387,6 +388,7 @@ async def _execute_gap_detection(
         "note": (
             f"Analyzed {items_count} items: "
             f"{result.total_new} new, "
+            f"{result.total_related} related, "
             f"{result.total_duplicates} duplicates, "
             f"{result.total_conflicts} conflicts, "
             f"{result.total_unprocessed} unprocessed."

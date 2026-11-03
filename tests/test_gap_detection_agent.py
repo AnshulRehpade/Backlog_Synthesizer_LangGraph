@@ -90,10 +90,32 @@ class TestLLMVerification:
         assert "JWT session management" in prompt
         assert "Use OAuth2 instead of JWT" in prompt
 
-    async def test_items_below_conflict_threshold_skip_the_llm(self):
-        agent, llm = _agent(0.30, _verdict("duplicate"))
+    async def test_items_below_verify_threshold_skip_the_llm(self):
+        agent, llm = _agent(0.29, _verdict("duplicate"))
         assert (await _classify(agent)).classification == "new"
         llm.generate.assert_not_called()
+
+    async def test_low_scoring_contradiction_is_judged(self):
+        """Contradictions often score below the conflict threshold; the judge still sees them."""
+        agent, llm = _agent(0.33, _verdict("conflict", "Mobile vs desktop-only"))
+        assert (await _classify(agent)).classification == "conflict"
+        llm.generate.assert_called_once()
+
+    async def test_related_verdict_links_ticket_without_review(self):
+        agent, _ = _agent(0.55, _verdict("related", "Bug report against the shipped feature"))
+        entry = await _classify(agent)
+        assert (entry.classification, entry.similar_ticket_id) == ("related", "T-1")
+        assert entry.relation == "Bug report against the shipped feature"
+        assert entry.conflict_info is None
+
+    async def test_failed_judge_below_conflict_threshold_stays_new(self):
+        agent, _ = _agent(0.40, llm_error=TransientToolError("down"))
+        assert (await _classify(agent)).classification == "new"
+
+    async def test_related_counted_in_totals(self):
+        agent, _ = _agent(0.55, _verdict("related"))
+        report = await agent.analyze_gaps([_item()])
+        assert (report.total_related, report.total_new, report.total_conflicts) == (1, 0, 0)
 
     async def test_reply_wrapped_in_prose_is_parsed(self):
         agent, _ = _agent(0.70, f"Sure! {_verdict('duplicate')} Hope that helps.")

@@ -30,8 +30,15 @@ from backlog_synthesizer_langgraph.tools.interfaces import (
 
 logger = logging.getLogger(__name__)
 
-# Maximum chunk size in characters (approximate token boundary)
-_CHUNK_SIZE = 2000
+# Item type for talk about the meeting itself; extracted, then set aside so it
+# never becomes a story.
+MEETING_NOTE = "meeting_note"
+_ITEM_TYPES = ("feature_request", "pain_point", "decision", "constraint", MEETING_NOTE)
+
+# Maximum chunk size in characters. Large enough that a typical meeting is read
+# in one piece: the model needs the whole discussion to recognize a closing recap
+# as repetition, and every chunk boundary risks a sentence being read twice or cut.
+_CHUNK_SIZE = 12000
 _CHUNK_OVERLAP = 200
 
 SYSTEM_PROMPT = (
@@ -50,8 +57,12 @@ Text chunk (from document "{filename}", chunk {chunk_index}):
 Extract items in these categories:
 - "feature_request": Something users/stakeholders want built
 - "pain_point": A problem or frustration mentioned
-- "decision": A decision that was made or proposed
+- "decision": A decision that was made or proposed about the product
 - "constraint": A technical or business constraint mentioned
+- "meeting_note": Talk about the meeting or the planning process rather than the product:
+  agenda and transitions ("let's talk about X"), scheduling, sizing or estimating work,
+  prioritizing or ranking items, and recaps or summaries that restate items already
+  discussed. Label these "meeting_note" instead of repeating them as new items.
 
 For each item, provide:
 - "item_type": one of the categories above
@@ -194,7 +205,7 @@ def _parse_extraction_response(response: str, chunk_index: int) -> list[Extracte
 
         try:
             item_type = raw_item.get("item_type", "feature_request")
-            if item_type not in ("feature_request", "pain_point", "decision", "constraint"):
+            if item_type not in _ITEM_TYPES:
                 item_type = "feature_request"
 
             text = str(raw_item.get("text", ""))[:200]
@@ -305,6 +316,14 @@ class ParserAgent:
 
             for items in chunk_results:
                 all_items.extend(items)
+
+        # Meeting notes (agenda, sizing, recaps) aren't requirements: keep them out
+        # of the items, but record them so the run shows what was set aside.
+        meeting_notes = [item for item in all_items if item.item_type == MEETING_NOTE]
+        all_items = [item for item in all_items if item.item_type != MEETING_NOTE]
+        if meeting_notes:
+            logger.info("Set aside %d meeting notes", len(meeting_notes))
+        metadata["meeting_notes"] = [item.text for item in meeting_notes]
 
         metadata["chunks_created"] = total_chunks
         # Approximate token counts (4 chars per token)

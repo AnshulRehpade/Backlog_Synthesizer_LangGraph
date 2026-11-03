@@ -165,7 +165,8 @@ async def _execute_parser(
     # 3. Initialize ParserAgent using PipelineConfig
     try:
         config = PipelineConfig.from_env()
-        llm_tool = config.create_llm_tool()
+        # Temperature 0 so the same transcript extracts the same items on every run.
+        llm_tool = config.create_llm_tool(temperature=0.0)
         document_parser = config.create_document_parser()
     except PermanentToolError as e:
         duration_ms = int((time.time() - start_time) * 1000)
@@ -295,6 +296,11 @@ async def _execute_parser(
     if result.errors:
         note_parts.append(
             f" {len(result.errors)} document(s) had parsing errors."
+        )
+    meeting_notes = result.metadata.get("meeting_notes", [])
+    if meeting_notes:
+        note_parts.append(
+            f" Set aside {len(meeting_notes)} meeting notes (agenda, sizing, recaps)."
         )
 
     react_notes.append({

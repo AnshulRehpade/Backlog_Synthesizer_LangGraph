@@ -562,3 +562,30 @@ async def test_llm_fallback_retry_refused_when_retry_count_exceeded():
     # Should fall back to return_partial since retry_count >= 1
     assert result["status"] == "partial_failure"
     assert result["react_notes"][-1]["action"] == "return_partial"
+
+
+# ─── Short transcripts after a parser retry ───────────────────────
+
+
+def test_few_items_after_retry_continue_to_gap_detection():
+    """A clear short transcript must not fail just because the retry was used."""
+    state = _make_state(parser_output=_make_extraction_result(2), retry_count=1)
+    assert route_after_parser(state) == "gap_detection"
+
+
+def test_few_items_without_retry_still_go_to_fallback():
+    state = _make_state(parser_output=_make_extraction_result(2), retry_count=0)
+    assert route_after_parser(state) == "llm_fallback_node"
+
+
+def test_few_low_confidence_items_after_retry_go_to_error():
+    items = [_make_extracted_item(f"Vague {i}", confidence=0.1) for i in range(2)]
+    result = ExtractionResult(items=items, errors=[], metadata={})
+    state = _make_state(parser_output=result, retry_count=1)
+    assert route_after_parser(state) == "error_node"
+
+
+def test_zero_items_after_retry_still_go_to_error():
+    result = ExtractionResult(items=[], errors=[], metadata={})
+    state = _make_state(parser_output=result, retry_count=1)
+    assert route_after_parser(state) == "error_node"

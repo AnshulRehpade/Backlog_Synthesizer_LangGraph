@@ -62,6 +62,8 @@ need refinement), the pipeline routes to the LLM Fallback node. This node:
 node increments `retry_count` before allowing a retry action. Routing functions check
 `retry_count >= 1` before sending to fallback again — if a retry has already been attempted
 and quality issues persist, routing sends to `error_node` instead. Maximum retries: **1**.
+Exception: fewer than 3 confident items after a parser retry continue to `gap_detection`,
+since a short transcript can be clear and a second retry would only fail the run.
 
 ### Level 3: Human Review Node (`nodes/human_review_node.py`)
 
@@ -78,7 +80,8 @@ persists state at the interrupt point. The graph resumes when the caller provide
 parser → routing:
   - permanent_failure or parser_output is None → error_node
   - 0 items extracted → llm_fallback_node (retry_count gate applies)
-  - < 3 items extracted → llm_fallback_node (too few — vague transcript)
+  - < 3 items extracted → llm_fallback_node (too few — vague transcript);
+    after a retry → gap_detection unless all items are low confidence
   - all items confidence < 0.3 → llm_fallback_node (parser uncertain)
   - otherwise → gap_detection (success)
 ```

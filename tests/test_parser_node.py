@@ -430,14 +430,14 @@ def test_routing_returns_error_node_with_retry_count_zero_items():
     assert result == "error_node"
 
 
-def test_routing_returns_error_node_with_retry_count_few_items():
-    """Test routing returns 'error_node' when retry_count >= 1 and < 3 items."""
+def test_routing_continues_with_few_items_after_retry():
+    """After a retry, few confident items continue — failing would discard usable output."""
     items = [_make_extracted_item("Only one", 0.9)]
     extraction = _make_extraction_result(items=items)
     state = _make_base_state(parser_output=extraction, retry_count=1)
 
     result = route_after_parser(state)
-    assert result == "error_node"
+    assert result == "gap_detection"
 
 
 def test_routing_returns_error_node_with_retry_count_low_confidence():

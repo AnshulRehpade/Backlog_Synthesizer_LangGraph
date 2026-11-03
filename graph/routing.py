@@ -30,7 +30,9 @@ def route_after_parser(state: PipelineState) -> str:
         - If parser_output is None → "error_node"
         - If 0 items extracted → "llm_fallback_node"
         - If < 3 items extracted → "llm_fallback_node"
-          (too few items — may indicate vague transcript)
+          (too few items — may indicate vague transcript). After a retry,
+          continue with the items instead: a short transcript can be clear,
+          and another retry would only fail the run.
         - If all items have confidence < 0.3 → "llm_fallback_node"
           (parser uncertain about everything)
         - Otherwise → "gap_detection" (success)
@@ -73,17 +75,18 @@ def route_after_parser(state: PipelineState) -> str:
     if item_count < 3:
         retry_count = state.get("retry_count", 0)
         if retry_count >= 1:
+            # Retry already used: keep the items unless they're all low confidence
+            # (checked below), rather than failing a run that has usable output.
             logger.info(
-                "Routing after parser: only %d items (< 3), retry_count=%d → error_node",
+                "Routing after parser: only %d items (< 3) after retry — continuing",
                 item_count,
-                retry_count,
             )
-            return "error_node"
-        logger.info(
-            "Routing after parser: only %d items (< 3) → llm_fallback_node",
-            item_count,
-        )
-        return "llm_fallback_node"
+        else:
+            logger.info(
+                "Routing after parser: only %d items (< 3) → llm_fallback_node",
+                item_count,
+            )
+            return "llm_fallback_node"
 
     # Check if all items are below the minimum confidence
     all_low_confidence = all(

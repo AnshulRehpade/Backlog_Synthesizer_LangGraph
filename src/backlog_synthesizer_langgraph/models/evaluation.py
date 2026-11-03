@@ -31,6 +31,8 @@ class EvalRunResult(BaseModel):
     golden_id: str
     keyword_overlap: float = 0.0
     stories_generated: int = 0
+    duplicates_found: int = 0
+    conflicts_found: int = 0
     passed: bool = True
     failure_reason: str | None = None
 

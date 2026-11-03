@@ -15,7 +15,9 @@ import pytest
 # Ensure graph/ and nodes/ are importable
 sys.path.insert(0, ".")
 
-from graph.routing import route_after_story_writer
+from langgraph.graph import END
+
+from graph.routing import route_after_llm_fallback, route_after_story_writer
 from graph.state import PipelineState
 from nodes.llm_fallback_node import (
     _build_observation,
@@ -258,6 +260,33 @@ async def test_halt_sets_permanent_failure_status():
     assert result["status"] == "permanent_failure"
     assert result["current_step"] == "llm_fallback"
     assert "halt" in result["react_notes"][0]["note"]
+
+
+@pytest.mark.asyncio
+async def test_return_nothing_new_completes_without_error():
+    """Test that return_nothing_new ends as completed — an already-covered backlog is not a failure."""
+    state = _make_base_state(current_step="gap_detection", retry_count=0)
+
+    llm_response = _make_llm_decision_response(
+        action="return_nothing_new",
+        reason="Every item already exists in the backlog",
+        confidence=0.9,
+    )
+
+    mock_llm = MagicMock()
+    mock_llm.generate.return_value = llm_response
+
+    with patch("nodes.llm_fallback_node.PipelineConfig") as mock_config_cls:
+        mock_config = MagicMock()
+        mock_config.create_llm_tool.return_value = mock_llm
+        mock_config_cls.from_env.return_value = mock_config
+
+        result = await llm_fallback_node(state)
+
+    assert result["status"] == "completed"
+    assert result["errors"] == []
+    assert result["react_notes"][0]["action"] == "return_nothing_new"
+    assert route_after_llm_fallback(result) == END
 
 
 @pytest.mark.asyncio
@@ -525,3 +554,28 @@ def test_routing_success_unaffected_by_retry_count():
 
     result = route_after_story_writer(state)
     assert result == "__end__"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("override, expected", [(None, 0.75), (0.75, 0.70)])
+async def test_lower_threshold_sets_override_for_retry(override, expected):
+    """lower_threshold must change what gap detection sees, or the retry is identical."""
+    state = _make_base_state(current_step="gap_detection", retry_count=0)
+    state["duplicate_threshold_override"] = override
+
+    mock_llm = MagicMock()
+    mock_llm.generate.return_value = _make_llm_decision_response(
+        action="lower_threshold", reason="Items may be new", confidence=0.7
+    )
+
+    with patch("nodes.llm_fallback_node.PipelineConfig") as mock_config_cls:
+        mock_config = MagicMock()
+        mock_config.create_llm_tool.return_value = mock_llm
+        mock_config.gap_detection_duplicate_threshold = 0.80
+        mock_config.gap_detection_conflict_threshold = 0.50
+        mock_config_cls.from_env.return_value = mock_config
+
+        result = await llm_fallback_node(state)
+
+    assert result["react_notes"][-1]["action"] == "lower_threshold"
+    assert result["duplicate_threshold_override"] == expected

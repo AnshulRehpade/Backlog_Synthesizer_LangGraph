@@ -14,6 +14,7 @@ import logging
 
 from langgraph.graph import END
 
+from backlog_synthesizer_langgraph.models.extraction import MIN_ITEM_CONFIDENCE
 from graph.state import PipelineState
 
 logger = logging.getLogger(__name__)
@@ -84,23 +85,25 @@ def route_after_parser(state: PipelineState) -> str:
         )
         return "llm_fallback_node"
 
-    # Check if all items have confidence < 0.3
+    # Check if all items are below the minimum confidence
     all_low_confidence = all(
-        item.confidence < 0.3 for item in items
+        item.confidence < MIN_ITEM_CONFIDENCE for item in items
     )
     if all_low_confidence:
         retry_count = state.get("retry_count", 0)
         if retry_count >= 1:
             logger.info(
-                "Routing after parser: all %d items have confidence < 0.3, "
+                "Routing after parser: all %d items have confidence < %.1f, "
                 "retry_count=%d → error_node",
                 item_count,
+                MIN_ITEM_CONFIDENCE,
                 retry_count,
             )
             return "error_node"
         logger.info(
-            "Routing after parser: all %d items have confidence < 0.3 → llm_fallback_node",
+            "Routing after parser: all %d items have confidence < %.1f → llm_fallback_node",
             item_count,
+            MIN_ITEM_CONFIDENCE,
         )
         return "llm_fallback_node"
 
@@ -348,8 +351,8 @@ def route_after_human_review(state: PipelineState) -> str:
 
     Reads the status and current_step to decide where to route:
         - If status == "permanent_failure" → END (human rejected)
-        - If current_step indicates gap_detection context → "gap_detection"
-        - If current_step indicates story_writer context → "story_writer"
+        - modify_threshold → "gap_detection" (re-run with the new threshold)
+        - Approved after gap_detection or story_writer → "story_writer"
         - Otherwise → END
 
     Args:
@@ -369,10 +372,11 @@ def route_after_human_review(state: PipelineState) -> str:
         last_note = react_notes[-1] if react_notes else {}
         action = last_note.get("action", "") if isinstance(last_note, dict) else ""
 
-        if action in ("approve_gap_detection", "modify_threshold"):
+        if action == "modify_threshold":
             logger.info("Routing after human_review: → gap_detection")
             return "gap_detection"
-        if action == "approve_story_writer":
+        # Approving gap results means "these classifications are fine, write the stories".
+        if action in ("approve_gap_detection", "approve_story_writer"):
             logger.info("Routing after human_review: → story_writer")
             return "story_writer"
 

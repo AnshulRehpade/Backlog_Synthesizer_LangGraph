@@ -20,6 +20,7 @@ from graph.state import PipelineState
 from backlog_synthesizer_langgraph.agents.parser import ParserAgent
 from backlog_synthesizer_langgraph.config import PipelineConfig
 from backlog_synthesizer_langgraph.memory.audit_log import AuditLog
+from backlog_synthesizer_langgraph.models.extraction import MIN_ITEM_CONFIDENCE
 from backlog_synthesizer_langgraph.models.memory import AuditEntry
 from backlog_synthesizer_langgraph.observability import get_tracer
 from backlog_synthesizer_langgraph.tools.errors import (
@@ -247,7 +248,7 @@ async def _execute_parser(
     output_tokens = result.metadata.get("output_tokens", 0)
 
     # Count low-confidence items (warnings)
-    low_confidence_items = [item for item in result.items if item.confidence < 0.3]
+    low_confidence_items = [item for item in result.items if item.confidence < MIN_ITEM_CONFIDENCE]
     low_confidence_count = len(low_confidence_items)
 
     # 6. Record OTel span attributes
@@ -289,7 +290,7 @@ async def _execute_parser(
     ]
     if low_confidence_count > 0:
         note_parts.append(
-            f" Warning: {low_confidence_count} items have confidence < 0.3."
+            f" Warning: {low_confidence_count} items have confidence < {MIN_ITEM_CONFIDENCE}."
         )
     if result.errors:
         note_parts.append(

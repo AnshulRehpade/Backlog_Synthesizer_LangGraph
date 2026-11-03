@@ -79,6 +79,9 @@ class PipelineState(TypedDict):
     # Human review flag (set by LLM fallback when human decision needed)
     needs_human_review: bool
 
+    # Duplicate threshold set by a retry or a human; None uses the configured value
+    duplicate_threshold_override: Optional[float]
+
     # Observability
     trace_id: str
     total_duration_ms: int

@@ -43,6 +43,7 @@ class OpenAIGenerationTool:
         model: str = "gpt-4o-mini",
         base_url: str | None = None,
         timeout: float = 60.0,
+        temperature: float | None = None,
     ) -> None:
         resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not resolved_key:
@@ -51,6 +52,7 @@ class OpenAIGenerationTool:
             )
 
         self._model = model
+        self._temperature = temperature
         self._client = openai.OpenAI(
             api_key=resolved_key,
             base_url=base_url,
@@ -78,9 +80,11 @@ class OpenAIGenerationTool:
         messages.append({"role": "user", "content": prompt})
 
         try:
+            extra = {} if self._temperature is None else {"temperature": self._temperature}
             response = self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,  # type: ignore[arg-type]
+                **extra,
             )
             content = response.choices[0].message.content
             if content is None:

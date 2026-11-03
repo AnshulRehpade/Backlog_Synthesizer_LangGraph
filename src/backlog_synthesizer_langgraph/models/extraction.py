@@ -4,6 +4,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+# Items below this confidence are treated as noise: filtered before gap detection,
+# turned into placeholder stories, and counted as low-confidence by the parser.
+MIN_ITEM_CONFIDENCE = 0.3
+
 
 class TextChunk(BaseModel):
     """A segment of text from a document after chunking."""

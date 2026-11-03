@@ -7,7 +7,8 @@ Usage:
 
 Loads documents and optional backlog tickets, builds initial PipelineState,
 runs the graph with session_id as thread_id for the checkpointer, and
-prints the final result.
+prints the final result. If the run pauses for human review, the CLI asks
+for a decision and resumes the same run.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import json
 import sys
 import uuid
 from pathlib import Path
+from typing import Callable
 
 from dotenv import load_dotenv
 
@@ -26,6 +28,7 @@ load_dotenv()  # Load .env file before any config reads
 sys.path.insert(0, ".")
 
 from graph.builder import compile_graph
+from graph.review import REVIEW_OPTIONS, pending_review, resume_review, thread_config
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.models.inputs import (
     BacklogTicket,
@@ -115,6 +118,7 @@ def _load_backlog(filepath: Path) -> list[BacklogTicket]:
 async def run_pipeline(
     transcript_path: str | list[str],
     backlog_path: str | None = None,
+    ask_reviewer: Callable[[dict], str | dict] | None = None,
 ) -> dict:
     """Run the full Backlog Synthesizer pipeline.
 
@@ -122,6 +126,9 @@ async def run_pipeline(
         transcript_path: Path(s) to transcript/document(s) to process.
             Can be a single path string or a list of paths for multi-document.
         backlog_path: Optional path to existing backlog tickets (JSON).
+        ask_reviewer: Called with the review request when the run pauses for
+            human review; its return value resumes the run. If None, a paused
+            run is returned as-is (pending_review() on the result is not None).
 
     Returns:
         Final pipeline state as a dict.
@@ -176,11 +183,37 @@ async def run_pipeline(
 
     # Compile and run graph
     graph = compile_graph()
-    config = {"configurable": {"thread_id": session_id}}
+    final_state = await graph.ainvoke(initial_state, config=thread_config(session_id))
 
-    final_state = await graph.ainvoke(initial_state, config=config)
+    while ask_reviewer is not None and (review := pending_review(final_state)) is not None:
+        final_state = await resume_review(graph, session_id, ask_reviewer(review))
 
     return final_state
+
+
+def _prompt_reviewer(review: dict) -> str | dict:
+    """Ask the person at the terminal to decide on a paused run."""
+    print(f"\n👤 {review.get('message', 'Human review required')}")
+    print(review.get("summary", ""))
+    if not sys.stdin.isatty():
+        print("No terminal attached — rejecting.")
+        return "reject"
+
+    options = "/".join(review.get("options", REVIEW_OPTIONS))
+    while True:
+        decision = input(f"Decision [{options}]: ").strip().lower()
+        if decision == "modify_threshold":
+            raw = input("New duplicate threshold (e.g. 0.85, blank to lower by 0.05): ").strip()
+            if not raw:
+                return decision
+            try:
+                return {"decision": decision, "duplicate_threshold": float(raw)}
+            except ValueError:
+                print("Not a number.")
+                continue
+        if decision in REVIEW_OPTIONS:
+            return decision
+        print(f"Choose one of: {options}")
 
 
 async def main() -> None:
@@ -201,7 +234,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     try:
-        result = await run_pipeline(args.transcript, args.backlog)
+        result = await run_pipeline(args.transcript, args.backlog, ask_reviewer=_prompt_reviewer)
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

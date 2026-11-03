@@ -17,12 +17,15 @@ import logging
 import time
 from datetime import datetime, timezone
 
+from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
 
 from graph.state import PipelineState
+from backlog_synthesizer_langgraph.config import PipelineConfig
 from backlog_synthesizer_langgraph.memory.audit_log import AuditLog
 from backlog_synthesizer_langgraph.models.memory import AuditEntry
 from backlog_synthesizer_langgraph.observability import get_tracer
+from nodes.gap_detection_node import THRESHOLD_STEP, effective_duplicate_threshold
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +45,12 @@ async def human_review_node(state: PipelineState) -> PipelineState:
     LangGraph's interrupt() to pause the graph and present a review
     summary to the human operator.
 
-    The human can:
-    - "approve" → continue to the appropriate next node
+    The human resumes the graph with Command(resume=...), passing either a
+    decision string or a dict like {"decision": ..., "duplicate_threshold": 0.85}:
+    - "approve" → accept the results so far and continue to story_writer
     - "reject" → set status to permanent_failure
-    - "modify_threshold" → route back to gap_detection with adjusted threshold
+    - "modify_threshold" → re-run gap_detection with the given duplicate_threshold
+      (or the current one lowered by 0.05 if none is given)
 
     Args:
         state: The current PipelineState.
@@ -64,6 +69,9 @@ async def human_review_node(state: PipelineState) -> PipelineState:
 
     try:
         return await _execute_human_review(state, start_time, span)
+    except GraphBubbleUp:
+        # interrupt() pauses the graph by raising; it must reach LangGraph, not the safety net.
+        raise
     except Exception as e:
         # Safety net — never crash the pipeline
         duration_ms = int((time.time() - start_time) * 1000)
@@ -123,8 +131,10 @@ async def _execute_human_review(
     duration_ms = int((time.time() - start_time) * 1000)
 
     # Handle human decision
+    requested_threshold = None
     if isinstance(human_decision, dict):
         decision = human_decision.get("decision", "reject")
+        requested_threshold = human_decision.get("duplicate_threshold")
     elif isinstance(human_decision, str):
         decision = human_decision
     else:
@@ -172,16 +182,22 @@ async def _execute_human_review(
         }
 
     elif decision == "modify_threshold":
+        if isinstance(requested_threshold, (int, float)) and 0.0 < requested_threshold <= 1.0:
+            threshold = float(requested_threshold)
+        else:
+            current = effective_duplicate_threshold(state, PipelineConfig.from_env())
+            threshold = round(current - THRESHOLD_STEP, 2)
         return {
             "current_step": "human_review",
             "status": "in_progress",
             "needs_human_review": False,
+            "duplicate_threshold_override": threshold,
             "errors": [],
             "react_notes": [
                 {
                     "node": "human_review",
                     "action": "modify_threshold",
-                    "note": "Human requested threshold modification — re-running gap detection",
+                    "note": f"Human set duplicate threshold to {threshold:.2f} — re-running gap detection",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ],

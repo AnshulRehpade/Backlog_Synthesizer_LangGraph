@@ -266,8 +266,12 @@ class PipelineConfig:
             persist_directory=self.chroma_persist_dir,
         )
 
-    def create_llm_tool(self) -> LLMGenerationTool:
-        """Create an LLMGenerationTool instance based on the configured provider."""
+    def create_llm_tool(self, temperature: float | None = None) -> LLMGenerationTool:
+        """Create an LLMGenerationTool instance based on the configured provider.
+
+        Args:
+            temperature: Sampling temperature; None keeps the provider default.
+        """
         if self.llm_provider == "anthropic":
             from backlog_synthesizer_langgraph.tools.anthropic_generation import AnthropicGenerationTool
 
@@ -276,6 +280,7 @@ class PipelineConfig:
                 model=self.anthropic_model,
                 max_tokens=self.anthropic_max_tokens,
                 timeout=self.anthropic_timeout,
+                temperature=temperature,
             )
         elif self.llm_provider == "openai":
             from backlog_synthesizer_langgraph.tools.llm_generation import OpenAIGenerationTool
@@ -285,6 +290,7 @@ class PipelineConfig:
                 model=self.openai_model,
                 base_url=self.openai_base_url,
                 timeout=self.openai_timeout,
+                temperature=temperature,
             )
         else:
             raise ValueError(

@@ -71,9 +71,20 @@ class LongTermMemory:
         self,
         query: str,
         top_k: int = 10,
+        where: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
-        """Search for items semantically similar to the query text."""
+        """Search for items semantically similar to the query text.
+
+        Args:
+            query: Text to search for.
+            top_k: Maximum number of results.
+            where: Optional metadata filter (Chroma syntax) to restrict matches.
+        """
         query_embedding = self._embedding_tool.generate_embedding(query)
+        if where:
+            return self._vector_search_tool.query_similar_filtered(
+                query_embedding, top_k, where=where
+            )
         return self._vector_search_tool.query_similar(query_embedding, top_k)
 
     def purge_expired(self, reference_time: datetime | None = None) -> list[str]:

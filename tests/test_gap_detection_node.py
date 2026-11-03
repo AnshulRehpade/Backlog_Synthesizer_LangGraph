@@ -187,6 +187,7 @@ async def test_gap_detection_node_reads_parser_output():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls:
@@ -212,6 +213,7 @@ async def test_gap_detection_node_writes_gap_output():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls:
@@ -238,6 +240,7 @@ async def test_gap_detection_node_updates_current_step():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls:
@@ -266,6 +269,7 @@ async def test_backlog_tickets_loaded_into_memory():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls:
@@ -303,6 +307,7 @@ async def test_extracted_items_stored_after_gap_detection():
         call_order.append("store")
 
     mock_vector.query_similar.side_effect = track_query
+    mock_vector.query_similar_filtered.side_effect = track_query
     mock_vector.store.side_effect = track_store
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls:
@@ -335,6 +340,7 @@ async def test_purge_expired_called():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls, \
@@ -371,6 +377,7 @@ async def test_otel_span_recorded():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     mock_span = MagicMock()
@@ -413,6 +420,7 @@ async def test_audit_log_entry_created():
     mock_embedding.generate_embedding.return_value = [0.1] * 384
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.gap_detection_node.PipelineConfig") as mock_config_cls:

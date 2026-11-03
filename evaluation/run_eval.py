@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -46,6 +47,10 @@ from backlog_synthesizer_langgraph.models.evaluation import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_DATASET_PATH = Path("evaluation/golden_dataset.json")
+
+# LLM extraction can split or merge items, so story counts get a tolerance;
+# duplicate and conflict counts come from deterministic thresholds and must match.
+STORY_COUNT_TOLERANCE = 1
 
 
 def _load_golden_dataset(path: Path) -> list[GoldenDatasetEntry]:
@@ -127,6 +132,10 @@ async def _run_single_entry(
 
     config = {"configurable": {"thread_id": session_id}}
 
+    # Long-term memory persists extracted items across sessions; give each entry its
+    # own collection so earlier entries can't show up as duplicates of later ones.
+    os.environ["CHROMA_COLLECTION"] = f"eval_{entry.id}_{session_id[:8]}"
+
     try:
         final_state = await graph.ainvoke(initial_state, config=config)
     except Exception as e:
@@ -156,21 +165,37 @@ async def _run_single_entry(
     # Compute keyword overlap
     keyword_overlap = _compute_keyword_overlap(entry.transcript, stories_text)
 
-    # Check pass/fail
-    passed = True
-    failure_reason = None
+    duplicates_found = gap_output.total_duplicates if gap_output is not None else 0
+    conflicts_found = gap_output.total_conflicts if gap_output is not None else 0
+
+    # Check pass/fail — collect every violated expectation, not just the first
+    failures: list[str] = []
 
     if status in ("permanent_failure",):
-        passed = False
-        failure_reason = f"Pipeline ended with {status}"
-    elif entry.expected_stories_count > 0 and stories_generated == 0:
-        passed = False
-        failure_reason = f"Expected {entry.expected_stories_count} stories, got 0"
+        failures.append(f"Pipeline ended with {status}")
+    else:
+        if abs(stories_generated - entry.expected_stories_count) > STORY_COUNT_TOLERANCE:
+            failures.append(
+                f"Stories: expected {entry.expected_stories_count} "
+                f"(±{STORY_COUNT_TOLERANCE}), got {stories_generated}"
+            )
+        if duplicates_found != entry.expected_duplicates:
+            failures.append(
+                f"Duplicates: expected {entry.expected_duplicates}, got {duplicates_found}"
+            )
+        if conflicts_found != entry.expected_conflicts:
+            failures.append(
+                f"Conflicts: expected {entry.expected_conflicts}, got {conflicts_found}"
+            )
+
+    passed = not failures
+    failure_reason = "; ".join(failures) if failures else None
 
     if verbose:
         status_icon = "✅" if passed else "❌"
         print(
             f"  {status_icon} {entry.id}: {stories_generated} stories, "
+            f"{duplicates_found} dup, {conflicts_found} conflict, "
             f"overlap={keyword_overlap:.2f}, status={status}"
         )
         if failure_reason:
@@ -180,6 +205,8 @@ async def _run_single_entry(
         golden_id=entry.id,
         keyword_overlap=keyword_overlap,
         stories_generated=stories_generated,
+        duplicates_found=duplicates_found,
+        conflicts_found=conflicts_found,
         passed=passed,
         failure_reason=failure_reason,
     )

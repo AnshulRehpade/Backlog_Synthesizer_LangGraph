@@ -35,6 +35,8 @@ class AnthropicGenerationTool:
         model: Model identifier to use for generation. Defaults to "claude-haiku-4-20250414".
         max_tokens: Maximum tokens in the response. Defaults to 4096.
         timeout: Request timeout in seconds. Defaults to 60.
+        temperature: Sampling temperature. None uses the API default (1.0);
+            use 0 for classification calls that should be repeatable.
     """
 
     def __init__(
@@ -43,6 +45,7 @@ class AnthropicGenerationTool:
         model: str = "claude-haiku-4-20250414",
         max_tokens: int = 4096,
         timeout: float = 60.0,
+        temperature: float | None = None,
     ) -> None:
         resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not resolved_key:
@@ -52,6 +55,7 @@ class AnthropicGenerationTool:
 
         self._model = model
         self._max_tokens = max_tokens
+        self._temperature = temperature
         self._client = anthropic.Anthropic(
             api_key=resolved_key,
             timeout=timeout,
@@ -111,6 +115,8 @@ class AnthropicGenerationTool:
 
         if system_prompt is not None:
             kwargs["system"] = system_prompt
+        if self._temperature is not None:
+            kwargs["temperature"] = self._temperature
 
         try:
             response = self._client.messages.create(**kwargs)

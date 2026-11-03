@@ -27,6 +27,7 @@ sys.path.insert(0, ".")
 import streamlit as st
 
 from graph.builder import compile_graph
+from graph.review import current_state, pending_review, resume_review, thread_config
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.models.inputs import (
     BacklogTicket,
@@ -71,6 +72,7 @@ async def run_pipeline_streaming(
     backlog_tickets: list[BacklogTicket],
     filename: str = "transcript.txt",
     progress_callback=None,
+    graph=None,
 ) -> dict:
     """Run the pipeline with streaming node updates.
 
@@ -82,9 +84,11 @@ async def run_pipeline_streaming(
         backlog_tickets: List of existing backlog tickets.
         filename: Name for the input document.
         progress_callback: Called with (node_name, state) after each node.
+        graph: Compiled graph to run on. Pass the same one to resume_review()
+            if the run pauses for human review.
 
     Returns:
-        Final pipeline state dict.
+        Full pipeline state from the last checkpoint (may be paused for review).
     """
     content = transcript_text.encode("utf-8")
     document = InputDocument(
@@ -117,23 +121,17 @@ async def run_pipeline_streaming(
         "total_duration_ms": 0,
     }
 
-    graph = compile_graph()
-    config = {"configurable": {"thread_id": session_id}}
+    graph = graph or compile_graph()
 
     # Stream node-by-node updates
-    final_state = None
-    async for chunk in graph.astream(initial_state, config=config):
+    async for chunk in graph.astream(initial_state, config=thread_config(session_id)):
         # chunk is a dict like {"node_name": state_update}
         for node_name, state_update in chunk.items():
-            if progress_callback:
+            if progress_callback and isinstance(state_update, dict):
                 progress_callback(node_name, state_update)
-            final_state = state_update
 
-    # If streaming produced no output, fall back to ainvoke
-    if final_state is None:
-        final_state = await graph.ainvoke(initial_state, config=config)
-
-    return final_state
+    # Chunks are per-node updates, not the whole state — read the full state back.
+    return await current_state(graph, session_id)
 
 
 # Keep the non-streaming version for tests
@@ -511,10 +509,13 @@ if run_clicked and transcript_text.strip():
     # Run pipeline with streaming
     start_time = time.time()
     try:
+        # Keep the graph so a run paused for human review can be resumed on a later rerun.
+        st.session_state["graph"] = compile_graph()
         result = asyncio.run(
             run_pipeline_streaming(
                 transcript_text, backlog_tickets, transcript_filename,
                 progress_callback=_on_node_complete,
+                graph=st.session_state["graph"],
             )
         )
     except Exception as e:
@@ -588,11 +589,31 @@ if "result" in st.session_state and st.session_state["result"] is not None:
                             f"[{err.get('node', '?')}] {err.get('message', 'unknown')}"
                         )
 
-    if result.get("needs_human_review"):
-        st.info("👤 Human review required")
-        hr_col1, hr_col2 = st.columns(2)
-        hr_col1.button("✅ Approve", key="hr_approve")
-        hr_col2.button("❌ Reject", key="hr_reject")
+    review = pending_review(result)
+    if review is not None and "graph" in st.session_state:
+        st.info("👤 Human review required — the run is paused until you decide")
+        st.text(review.get("summary", ""))
+        hr_col1, hr_col2, hr_col3 = st.columns(3)
+        decision = None
+        if hr_col1.button("✅ Approve — write stories", key="hr_approve"):
+            decision = "approve"
+        if hr_col2.button("❌ Reject", key="hr_reject"):
+            decision = "reject"
+        new_threshold = hr_col3.number_input(
+            "Duplicate threshold", min_value=0.55, max_value=0.95,
+            value=0.75, step=0.05, key="hr_threshold",
+        )
+        if hr_col3.button("🔁 Re-run gap detection", key="hr_rerun"):
+            decision = {"decision": "modify_threshold", "duplicate_threshold": new_threshold}
+
+        if decision is not None:
+            graph = st.session_state["graph"]
+            with st.spinner("Resuming pipeline..."):
+                asyncio.run(resume_review(graph, result["session_id"], decision))
+                st.session_state["result"] = asyncio.run(
+                    current_state(graph, result["session_id"])
+                )
+            st.rerun()
 
     # ─── Section 4: Results ───────────────────────────────────────
 

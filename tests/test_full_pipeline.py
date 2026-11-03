@@ -379,8 +379,8 @@ def test_llm_fallback_request_review_routes_to_human_review():
     assert result == "human_review"
 
 
-def test_human_review_approve_routes_to_gap_detection():
-    """Test human_review → gap_detection when human approves gap_detection context."""
+def test_human_review_approve_gap_detection_routes_to_story_writer():
+    """Approving gap results continues to story_writer rather than re-running gap detection."""
     state = _make_state(
         gap_output=_make_gap_report(),
         react_notes=[
@@ -394,7 +394,7 @@ def test_human_review_approve_routes_to_gap_detection():
         status="in_progress",
     )
     result = route_after_human_review(state)
-    assert result == "gap_detection"
+    assert result == "story_writer"
 
 
 def test_human_review_modify_threshold_routes_to_gap_detection():

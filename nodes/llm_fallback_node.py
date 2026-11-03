@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.config import PipelineConfig
+from nodes.gap_detection_node import THRESHOLD_STEP, effective_duplicate_threshold
 from backlog_synthesizer_langgraph.memory.audit_log import AuditLog
 from backlog_synthesizer_langgraph.models.memory import AuditEntry
 from backlog_synthesizer_langgraph.observability import get_tracer
@@ -215,6 +216,9 @@ async def _execute_fallback(
                 status=state.get("status", "in_progress"),
                 increment_retry=True,
             )
+            # Gap detection reads its threshold from state, so the retry actually differs.
+            current = effective_duplicate_threshold(state, PipelineConfig.from_env())
+            result["duplicate_threshold_override"] = round(current - THRESHOLD_STEP, 2)
     elif action == "proceed_with_low_confidence":
         result = _build_terminal(
             state, action=action, reason=reason,
@@ -247,7 +251,8 @@ async def _execute_fallback(
             state, action=action,
             reason="All items already exist in backlog — nothing new to process",
             duration_ms=duration_ms, confidence=confidence,
-            status="permanent_failure",
+            # A backlog that already covers everything is a valid outcome, not an error.
+            status="completed",
         )
     elif action == "halt":
         result = _build_terminal(

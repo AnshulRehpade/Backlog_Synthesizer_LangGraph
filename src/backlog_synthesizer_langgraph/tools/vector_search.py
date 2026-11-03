@@ -156,7 +156,8 @@ class ChromaVectorSearchTool:
 
         for i, item_id in enumerate(ids):
             distance = distances[i] if i < len(distances) else 0.0
-            score = 1.0 - distance
+            # Float rounding can push cosine distance slightly below 0 (score > 1.0).
+            score = min(1.0, max(0.0, 1.0 - distance))
 
             metadata = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
 

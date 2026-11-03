@@ -23,6 +23,7 @@ from backlog_synthesizer_langgraph.agents.gap_detection import GapDetectionAgent
 from backlog_synthesizer_langgraph.config import PipelineConfig
 from backlog_synthesizer_langgraph.memory.audit_log import AuditLog
 from backlog_synthesizer_langgraph.memory.long_term import LongTermMemory
+from backlog_synthesizer_langgraph.models.extraction import MIN_ITEM_CONFIDENCE
 from backlog_synthesizer_langgraph.models.memory import AuditEntry
 from backlog_synthesizer_langgraph.observability import get_tracer
 from backlog_synthesizer_langgraph.tools.errors import (
@@ -31,6 +32,17 @@ from backlog_synthesizer_langgraph.tools.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+THRESHOLD_STEP = 0.05
+
+
+def effective_duplicate_threshold(state: PipelineState, config: PipelineConfig) -> float:
+    """Duplicate threshold for this run: the override if one was set, else config."""
+    override = state.get("duplicate_threshold_override")
+    threshold = override if override is not None else config.gap_detection_duplicate_threshold
+    # Must stay above the conflict threshold or the conflict band disappears.
+    return max(threshold, config.gap_detection_conflict_threshold + THRESHOLD_STEP)
+
 
 # Module-level audit log instance
 _audit_log = AuditLog()
@@ -137,7 +149,7 @@ async def _execute_gap_detection(
     extracted_items = parser_output.items
 
     # 1b. Confidence-based filtering — remove noise before gap detection
-    confidence_threshold = 0.3
+    confidence_threshold = MIN_ITEM_CONFIDENCE
     filtered_items = [item for item in extracted_items if item.confidence >= confidence_threshold]
     filtered_out = len(extracted_items) - len(filtered_items)
     if filtered_out > 0:
@@ -260,10 +272,20 @@ async def _execute_gap_detection(
         }
 
     # 6. Create GapDetectionAgent and analyze gaps
+    # LLM verification is optional — without a tool the agent uses thresholds alone.
+    try:
+        # Temperature 0 so the same match gets the same verdict on every run.
+        llm_tool = config.create_llm_tool(temperature=0.0)
+    except Exception as e:
+        logger.warning("LLM tool unavailable for gap verification: %s", e)
+        llm_tool = None
+
     agent = GapDetectionAgent(
         long_term_memory=long_term_memory,
-        duplicate_threshold=config.gap_detection_duplicate_threshold,
+        duplicate_threshold=effective_duplicate_threshold(state, config),
         conflict_threshold=config.gap_detection_conflict_threshold,
+        llm_tool=llm_tool,
+        ticket_ids=[ticket.id for ticket in backlog_tickets],
     )
 
     try:

@@ -82,6 +82,7 @@ async def test_run_pipeline_returns_correct_state_structure():
 
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.parser_node.PipelineConfig") as mock_p_cfg, \
@@ -199,6 +200,7 @@ async def test_run_pipeline_with_backlog_tickets():
 
     mock_vector = MagicMock()
     mock_vector.query_similar.return_value = []
+    mock_vector.query_similar_filtered.return_value = []
     mock_vector.store.return_value = None
 
     with patch("nodes.parser_node.PipelineConfig") as mock_p_cfg, \

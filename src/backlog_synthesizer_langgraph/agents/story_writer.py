@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from backlog_synthesizer_langgraph.models.extraction import ExtractedItem
+from backlog_synthesizer_langgraph.models.extraction import MIN_ITEM_CONFIDENCE, ExtractedItem
 from backlog_synthesizer_langgraph.models.gap_detection import GapReportEntry
 from backlog_synthesizer_langgraph.models.output import (
     AcceptanceCriterion,
@@ -124,7 +124,7 @@ def _has_insufficient_detail(item: ExtractedItem) -> bool:
     Returns:
         True if the item has insufficient detail.
     """
-    return len(item.text.strip()) < 10 or item.confidence < 0.3
+    return len(item.text.strip()) < 10 or item.confidence < MIN_ITEM_CONFIDENCE
 
 
 def _create_placeholder_story(item: ExtractedItem) -> UserStory:

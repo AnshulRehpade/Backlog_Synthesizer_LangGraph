@@ -10,8 +10,11 @@ build/
 .venv/
 venv/
 
-# Environment secrets
+# Environment secrets (keep the example)
 .env
+.env.*
+!.env.example
+.streamlit/secrets.toml
 
 # IDE
 .idea/
@@ -23,13 +26,21 @@ venv/
 
 # Coverage
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 
-# Pytest
+# Test and lint caches
 .pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
 
 # ChromaDB local persistence
 chroma_data/
+
+# LangGraph SQLite checkpoints (CHECKPOINTER_BACKEND=sqlite): saved run state, incl. transcripts
+.checkpoints/
 
 # Runs/logs
 runs/

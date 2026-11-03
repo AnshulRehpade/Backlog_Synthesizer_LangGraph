@@ -191,8 +191,39 @@ async def run_pipeline(
     return final_state
 
 
+_RESOLUTION_KEYS = {"m": "meeting_wins", "k": "keep_ticket", "b": "keep_both"}
+
+
+def _prompt_conflicts(review: dict) -> str | dict:
+    """Show every conflict with its suggestion; one keypress accepts them all."""
+    print(f"\n⚖️  {review.get('message', 'Conflicts need a decision')}")
+    for c in review.get("conflicts", []):
+        print(f"\n  [{c['index']}] Meeting: {c['item']}")
+        print(f"      Ticket {c['ticket_id']} ({c['ticket_status'] or '?'}): "
+              f"{c['ticket_title']} — {c['ticket_description']}")
+        print(f"      Why: {c['reason']}")
+        print(f"      Suggested: {c['suggestion']}")
+    if not sys.stdin.isatty():
+        print("No terminal attached — accepting all suggestions.")
+        return "accept_all"
+
+    if input("\nAccept all suggestions? [Y/n]: ").strip().lower() in ("", "y", "yes"):
+        return "accept_all"
+    overrides = {}
+    for c in review.get("conflicts", []):
+        default_key = next(k for k, v in _RESOLUTION_KEYS.items() if v == c["suggestion"])
+        raw = input(
+            f"  [{c['index']}] m=meeting wins, k=keep ticket, b=keep both "
+            f"(enter = {default_key}): "
+        ).strip().lower()
+        overrides[str(c["index"])] = _RESOLUTION_KEYS.get(raw, c["suggestion"])
+    return {"resolutions": overrides}
+
+
 def _prompt_reviewer(review: dict) -> str | dict:
     """Ask the person at the terminal to decide on a paused run."""
+    if review.get("kind") == "conflict_review":
+        return _prompt_conflicts(review)
     print(f"\n👤 {review.get('message', 'Human review required')}")
     print(review.get("summary", ""))
     if not sys.stdin.isatty():

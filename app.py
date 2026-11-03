@@ -603,7 +603,50 @@ if "result" in st.session_state and st.session_state["result"] is not None:
                             f"[{err.get('node', '?')}] {err.get('message', 'unknown')}"
                         )
 
-    if review is not None and "graph" in st.session_state:
+    if review is not None and review.get("kind") == "conflict_review" and "graph" in st.session_state:
+        # One screen for every conflict; each is pre-set to the judge's suggestion.
+        st.info(f"⚖️ {review['message']} — the run is paused until you decide")
+        options = review["options"]
+        labels = {
+            "meeting_wins": "Meeting wins — update the ticket",
+            "keep_ticket": "Keep the ticket — no story",
+            "keep_both": "Keep both",
+        }
+        choices = {}
+        for c in review["conflicts"]:
+            with st.container(border=True):
+                st.markdown(f"**Meeting:** {c['item']}")
+                st.markdown(
+                    f"**Ticket {c['ticket_id']}** ({c['ticket_status'] or 'unknown status'}): "
+                    f"{c['ticket_title']} — {c['ticket_description']}"
+                )
+                st.caption(f"Why it conflicts: {c['reason']}")
+                keys = list(options)
+                choices[str(c["index"])] = st.radio(
+                    "Decision",
+                    keys,
+                    index=keys.index(c["suggestion"]) if c["suggestion"] in keys else 0,
+                    format_func=lambda k, s=c["suggestion"]: labels.get(k, k) + (" (suggested)" if k == s else ""),
+                    horizontal=True,
+                    key=f"cr_{c['index']}",
+                )
+        cr_col1, cr_col2 = st.columns(2)
+        decision = None
+        if cr_col1.button("✅ Accept all suggestions", key="cr_accept_all", type="primary"):
+            decision = "accept_all"
+        if cr_col2.button("Apply my choices", key="cr_apply"):
+            decision = {"resolutions": choices}
+
+        if decision is not None:
+            graph = st.session_state["graph"]
+            with st.spinner("Writing stories..."):
+                asyncio.run(resume_review(graph, result["session_id"], decision))
+                st.session_state["result"] = asyncio.run(
+                    current_state(graph, result["session_id"])
+                )
+            st.rerun()
+
+    elif review is not None and "graph" in st.session_state:
         st.info("👤 Human review required — the run is paused until you decide")
         st.text(review.get("summary", ""))
         hr_col1, hr_col2, hr_col3 = st.columns(3)

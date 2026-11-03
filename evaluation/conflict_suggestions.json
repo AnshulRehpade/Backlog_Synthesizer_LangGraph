@@ -1,0 +1,51 @@
+[
+  {
+    "id": "cs-1",
+    "item": "Build SSO-aware login flow with org-level auth detection (SSO vs password)",
+    "ticket": {"id": "PLAT-109", "title": "Investigate SSO options for enterprise", "description": "Research spike: evaluate SAML 2.0 and OpenID Connect as SSO options for enterprise customers. Document trade-offs.", "status": "in_progress"},
+    "acceptable": ["keep_both"],
+    "why": "Building the login flow is the next phase after the research spike; it doesn't replace the spike."
+  },
+  {
+    "id": "cs-2",
+    "item": "Start authentication overhaul with SAML implementation for Acme Corp",
+    "ticket": {"id": "PLAT-109", "title": "Investigate SSO options for enterprise", "description": "Research spike: evaluate SAML 2.0 and OpenID Connect as SSO options for enterprise customers. Document trade-offs.", "status": "in_progress"},
+    "acceptable": ["meeting_wins", "keep_both"],
+    "why": "Choosing SAML settles the spike's open question (meeting wins), but implementation can also follow the spike (keep both)."
+  },
+  {
+    "id": "cs-3",
+    "item": "Add rate limiting to login endpoint to prevent brute-force attacks",
+    "ticket": {"id": "PLAT-103", "title": "API rate limiting - global 100 req/s", "description": "Implement global rate limiting at 100 requests per second across all API endpoints using in-memory counter.", "status": "done"},
+    "acceptable": ["keep_both"],
+    "why": "A stricter limit on one endpoint is added on top of the global limit; the global limit stays."
+  },
+  {
+    "id": "cs-4",
+    "item": "Implement tiered rate limits: Free 100 req/s, Pro 500, Enterprise 2000 with burst allowance using token bucket algorithm in Redis",
+    "ticket": {"id": "PLAT-103", "title": "API rate limiting - global 100 req/s", "description": "Implement global rate limiting at 100 requests per second across all API endpoints using in-memory counter.", "status": "done"},
+    "acceptable": ["meeting_wins"],
+    "why": "Tiered limits in Redis replace the single global in-memory limit."
+  },
+  {
+    "id": "cs-5",
+    "item": "CSV export feature broken for 2 weeks; times out for datasets over 10,000 rows",
+    "ticket": {"id": "PLAT-104", "title": "CSV data export", "description": "Allow users to export their project data as CSV files. Synchronous implementation handles up to 5000 rows.", "status": "done"},
+    "acceptable": ["meeting_wins", "keep_both"],
+    "why": "A bug report against shipped work; it needs a story either as a change to the export or as a fix alongside it."
+  },
+  {
+    "id": "cs-6",
+    "item": "Move CSV export to async job queue with progress notifications to handle large datasets",
+    "ticket": {"id": "PLAT-104", "title": "CSV data export", "description": "Allow users to export their project data as CSV files. Synchronous implementation handles up to 5000 rows.", "status": "done"},
+    "acceptable": ["meeting_wins"],
+    "why": "Async processing replaces the synchronous 5,000-row design."
+  },
+  {
+    "id": "cs-7",
+    "item": "Size SSO/SAML, password reset, rate limiting, and CSV export items in second half of meeting",
+    "ticket": {"id": "PLAT-109", "title": "Investigate SSO options for enterprise", "description": "Research spike: evaluate SAML 2.0 and OpenID Connect as SSO options for enterprise customers. Document trade-offs.", "status": "in_progress"},
+    "acceptable": ["keep_ticket"],
+    "why": "A meeting agenda note, not a requirement; it shouldn't become a story."
+  }
+]

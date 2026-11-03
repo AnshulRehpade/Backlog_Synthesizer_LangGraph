@@ -164,7 +164,7 @@ def _make_state(**overrides) -> PipelineState:
 
 
 def test_graph_builds_with_all_nodes():
-    """Test that the graph builds with all 6 expected nodes."""
+    """Test that the graph builds with all 7 expected nodes."""
     g = build_graph()
     nodes = list(g.nodes.keys())
     assert "parser" in nodes
@@ -173,7 +173,8 @@ def test_graph_builds_with_all_nodes():
     assert "error_node" in nodes
     assert "llm_fallback_node" in nodes
     assert "human_review" in nodes
-    assert len(nodes) == 6
+    assert "conflict_review" in nodes
+    assert len(nodes) == 7
 
 
 def test_graph_compiles_with_checkpointer():

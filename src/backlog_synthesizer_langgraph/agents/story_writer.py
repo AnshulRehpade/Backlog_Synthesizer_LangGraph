@@ -127,6 +127,11 @@ def _has_insufficient_detail(item: ExtractedItem) -> bool:
     return len(item.text.strip()) < 10 or item.confidence < MIN_ITEM_CONFIDENCE
 
 
+def _kept_ticket(entry: GapReportEntry) -> bool:
+    """A reviewer chose to keep the existing ticket, so the item gets no story."""
+    return entry.conflict_info is not None and entry.conflict_info.resolution == "keep_ticket"
+
+
 def _create_placeholder_story(item: ExtractedItem) -> UserStory:
     """Create a placeholder user story for items with insufficient detail.
 
@@ -290,7 +295,7 @@ class StoryWriterAgent:
         # Filter to eligible classifications only
         eligible_entries = [
             entry for entry in items
-            if entry.classification in ELIGIBLE_CLASSIFICATIONS
+            if entry.classification in ELIGIBLE_CLASSIFICATIONS and not _kept_ticket(entry)
         ]
 
         if not eligible_entries:
@@ -330,15 +335,27 @@ class StoryWriterAgent:
 
         # Inject conflict context if this is a CONFLICT entry
         if entry.classification == "conflict" and entry.conflict_info is not None:
+            info = entry.conflict_info
+            if info.resolution == "keep_both":
+                # A reviewer decided the ticket stands and this item is added beside it.
+                framing = (
+                    "A reviewer decided BOTH should exist. Write the story as an addition "
+                    "alongside the existing ticket, not a replacement, and do not deprecate "
+                    "the ticket's behavior.\n"
+                )
+            else:
+                framing = (
+                    "The user story should clearly describe what is DIFFERENT from the "
+                    "existing ticket. Frame it as an update, migration, or replacement. "
+                    "Include acceptance criteria that validate the new approach works "
+                    "AND that the old behavior is properly deprecated or migrated.\n"
+                )
             conflict_section = (
                 "\n\n## Conflict Context:\n"
-                f"This item CONFLICTS with existing ticket '{entry.conflict_info.item_b_ticket_id}'.\n"
-                f"Similarity score: {entry.conflict_info.similarity_score:.2f}\n"
-                f"What changed: {entry.conflict_info.contradiction_description}\n\n"
-                "The user story should clearly describe what is DIFFERENT from the "
-                "existing ticket. Frame it as an update, migration, or replacement. "
-                "Include acceptance criteria that validate the new approach works "
-                "AND that the old behavior is properly deprecated or migrated.\n"
+                f"This item CONFLICTS with existing ticket '{info.item_b_ticket_id}'.\n"
+                f"Similarity score: {info.similarity_score:.2f}\n"
+                f"What changed: {info.contradiction_description}\n\n"
+                + framing
             )
             prompt = conflict_section + prompt
 

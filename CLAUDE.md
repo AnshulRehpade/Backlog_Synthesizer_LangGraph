@@ -74,6 +74,17 @@ persists state at the interrupt point. The graph resumes when the caller provide
 - `"reject"` → terminate pipeline with permanent failure
 - `"modify_threshold"` → re-run gap detection with adjusted parameters
 
+### Conflict Review Node (`nodes/conflict_review_node.py`)
+
+Every route into `story_writer` passes through `conflict_review` first. If the gap report
+has unresolved conflicts (and `CONFLICT_REVIEW` isn't `false`), it pauses once with all of
+them on one screen, each pre-set to the judge's suggested resolution: `meeting_wins`
+(story updates the ticket), `keep_ticket` (no story), or `keep_both` (story alongside the
+ticket). Resume with `"accept_all"` or `{"resolutions": {"<index>": "<resolution>"}}`.
+The judge derives the suggestion from two yes/no answers (`is_product_work`,
+`replaces_ticket`). The eval turns review off. Suggestion quality is measured by
+`evaluation/run_suggestion_eval.py` on `evaluation/conflict_suggestions.json`.
+
 ### route_after_parser Logic
 
 ```

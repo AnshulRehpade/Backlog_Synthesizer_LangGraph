@@ -9,6 +9,10 @@ Full pipeline topology:
     llm_fallback_node → [conditional] → parser | gap_detection | story_writer | human_review | END
     human_review → [conditional] → gap_detection | story_writer | END
     error_node → END
+
+Every "→ story_writer" above actually enters conflict_review first, which
+pauses for a person when there are unresolved conflicts and otherwise passes
+straight through.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from graph.routing import (
     route_after_story_writer,
 )
 from graph.state import PipelineState
+from nodes.conflict_review_node import conflict_review_node
 from nodes.error_node import error_node
 from nodes.gap_detection_node import gap_detection_node
 from nodes.human_review_node import human_review_node
@@ -56,6 +61,7 @@ def build_graph() -> StateGraph:
     builder.add_node("error_node", error_node)
     builder.add_node("llm_fallback_node", llm_fallback_node)
     builder.add_node("human_review", human_review_node)
+    builder.add_node("conflict_review", conflict_review_node)
 
     # Set entry point
     builder.set_entry_point("parser")
@@ -78,7 +84,7 @@ def build_graph() -> StateGraph:
         {
             "error_node": "error_node",
             "llm_fallback_node": "llm_fallback_node",
-            "story_writer": "story_writer",
+            "story_writer": "conflict_review",  # conflicts are settled first
         },
     )
 
@@ -100,7 +106,7 @@ def build_graph() -> StateGraph:
         {
             "parser": "parser",
             "gap_detection": "gap_detection",
-            "story_writer": "story_writer",
+            "story_writer": "conflict_review",  # conflicts are settled first
             "human_review": "human_review",
             END: END,
         },
@@ -112,10 +118,14 @@ def build_graph() -> StateGraph:
         route_after_human_review,
         {
             "gap_detection": "gap_detection",
-            "story_writer": "story_writer",
+            "story_writer": "conflict_review",  # conflicts are settled first
             END: END,
         },
     )
+
+    # Every route to story_writer passes through conflict_review, which pauses for a
+    # person only when there are unresolved conflicts.
+    builder.add_edge("conflict_review", "story_writer")
 
     # error_node is terminal
     builder.add_edge("error_node", END)

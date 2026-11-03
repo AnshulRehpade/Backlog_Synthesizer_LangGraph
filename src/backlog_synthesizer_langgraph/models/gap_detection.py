@@ -13,6 +13,14 @@ class DuplicateFlag(BaseModel):
     similarity_score: float = Field(ge=0.0, le=1.0)
 
 
+# How a person can settle a conflict between a meeting item and a ticket.
+RESOLUTIONS = {
+    "meeting_wins": "The meeting decision replaces the ticket — write a story that updates it",
+    "keep_ticket": "Keep the existing ticket as it is — write no story for this item",
+    "keep_both": "Both stand — write a story for the item alongside the ticket",
+}
+
+
 class ConflictFlag(BaseModel):
     """Flag indicating a conflict between an extracted item and an existing ticket."""
 
@@ -20,6 +28,9 @@ class ConflictFlag(BaseModel):
     item_b_ticket_id: str
     similarity_score: float = Field(ge=0.50, le=0.85)
     contradiction_description: str
+    # What the judge suggests, and what a person decided (None until reviewed).
+    suggested_resolution: str = "meeting_wins"
+    resolution: str | None = None
 
 
 class GapReportEntry(BaseModel):

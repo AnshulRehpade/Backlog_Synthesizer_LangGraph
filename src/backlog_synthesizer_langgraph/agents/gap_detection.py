@@ -26,6 +26,7 @@ from typing import Any
 from backlog_synthesizer_langgraph.memory.long_term import LongTermMemory
 from backlog_synthesizer_langgraph.models.extraction import ExtractedItem
 from backlog_synthesizer_langgraph.models.gap_detection import (
+    RESOLUTIONS,
     ConflictFlag,
     DuplicateFlag,
     GapReport,
@@ -44,7 +45,17 @@ _VERIFY_SYSTEM_PROMPT = (
     "- conflict: same area, but the requirement contradicts, replaces, or changes the "
     "ticket's scope, constraints, or approach (e.g. different limits, sync vs async, "
     "one technology instead of another).\n"
-    "- unrelated: a different piece of work that merely shares vocabulary."
+    "- unrelated: a different piece of work that merely shares vocabulary.\n"
+    "For a conflict, also answer two questions as booleans:\n"
+    "- \"is_product_work\": is the requirement something to build or change in the "
+    "product? false for meeting logistics, agenda or planning notes (sizing, "
+    "prioritizing, scheduling) and tentative ideas.\n"
+    "- \"replaces_ticket\": does building the requirement mean removing, undoing, or "
+    "redoing differently what the ticket describes (its limits, technology, "
+    "architecture, or behavior)? false when the ticket's work stays in place and the "
+    "requirement adds to it, covers one part of it, or is the next phase after it, "
+    "even if the ticket alone would not be enough. The ticket's status says whether "
+    "its work already exists."
 )
 
 _VERDICTS = {"duplicate", "conflict", "unrelated"}
@@ -184,13 +195,13 @@ class GapDetectionAgent:
 
         # Embedding similarity can't tell agreement from contradiction, so let the
         # LLM make the call when one is available.
-        verdict, reason = await self._verify_with_llm(item, best_match)
+        verdict, reason, suggestion = await self._verify_with_llm(item, best_match)
         if verdict == "unrelated":
             return self._new_entry(item, score)
         if verdict == "duplicate":
             return self._duplicate_entry(item, best_match, score)
         if verdict == "conflict":
-            return self._conflict_entry(item, best_match, score, reason)
+            return self._conflict_entry(item, best_match, score, reason, suggestion)
 
         # No verdict (no LLM tool, or the call failed) — fall back to thresholds.
         if score >= self._duplicate_threshold:
@@ -233,7 +244,11 @@ class GapDetectionAgent:
 
     @staticmethod
     def _conflict_entry(
-        item: ExtractedItem, match: SearchResult, score: float, description: str
+        item: ExtractedItem,
+        match: SearchResult,
+        score: float,
+        description: str,
+        suggestion: str | None = None,
     ) -> GapReportEntry:
         return GapReportEntry(
             item=item,
@@ -247,24 +262,28 @@ class GapDetectionAgent:
                 item_b_ticket_id=match.item_id,
                 similarity_score=min(max(score, _CONFLICT_SCORE_MIN), _CONFLICT_SCORE_MAX),
                 contradiction_description=description,
+                suggested_resolution=suggestion or "meeting_wins",
             ),
         )
 
     async def _verify_with_llm(
         self, item: ExtractedItem, match: SearchResult
-    ) -> tuple[str | None, str]:
+    ) -> tuple[str | None, str, str | None]:
         """Ask the LLM whether an item duplicates, conflicts with, or is unrelated to its match.
 
         Returns:
-            (verdict, reason). verdict is None when there is no LLM tool or the
-            call or its output is unusable, so the caller falls back to thresholds.
+            (verdict, reason, suggestion). verdict is None when there is no LLM
+            tool or the call or its output is unusable, so the caller falls back
+            to thresholds. suggestion is a RESOLUTIONS key for conflicts, else None.
         """
         if self._llm_tool is None:
-            return None, ""
+            return None, "", None
 
         ticket_text = match.metadata.get("content") or match.metadata.get("title") or ""
+        status = match.metadata.get("status")
+        status_text = f" (status: {status})" if status else ""
         prompt = (
-            f"Existing ticket {match.item_id}: {ticket_text}\n"
+            f"Existing ticket {match.item_id}{status_text}: {ticket_text}\n"
             f"New requirement: {item.text}\n"
         )
         try:
@@ -273,22 +292,39 @@ class GapDetectionAgent:
             )
         except Exception as e:
             logger.warning("LLM verification failed for '%s': %s", item.text[:50], e)
-            return None, ""
+            return None, "", None
 
         return self._parse_verdict(raw)
 
     @staticmethod
-    def _parse_verdict(raw: Any) -> tuple[str | None, str]:
+    def _parse_verdict(raw: Any) -> tuple[str | None, str, str | None]:
         if not isinstance(raw, str):
-            return None, ""
+            return None, "", None
         found = re.search(r"\{.*\}", raw, re.DOTALL)
         if not found:
-            return None, ""
+            return None, "", None
         try:
             data = json.loads(found.group(0))
         except json.JSONDecodeError:
-            return None, ""
+            return None, "", None
         verdict = str(data.get("verdict", "")).strip().lower()
         if verdict not in _VERDICTS:
-            return None, ""
-        return verdict, str(data.get("reason", "")).strip()
+            return None, "", None
+        suggestion = _suggest_resolution(data) if verdict == "conflict" else None
+        return verdict, str(data.get("reason", "")).strip(), suggestion
+
+
+def _suggest_resolution(data: dict) -> str | None:
+    """Derive a RESOLUTIONS key from the judge's two yes/no answers.
+
+    Asking narrow factual questions and mapping them in code is steadier than
+    asking the model to pick a resolution label directly.
+    """
+    if data.get("is_product_work") is False:
+        return "keep_ticket"
+    if data.get("replaces_ticket") is False:
+        return "keep_both"
+    if data.get("replaces_ticket") is True:
+        return "meeting_wins"
+    suggestion = str(data.get("suggestion", "")).strip().lower()
+    return suggestion if suggestion in RESOLUTIONS else None

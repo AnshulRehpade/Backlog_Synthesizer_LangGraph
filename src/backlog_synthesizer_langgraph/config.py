@@ -83,6 +83,9 @@ class PipelineConfig:
     # Few-shot prompting
     few_shot_enabled: bool = True
 
+    # Pause before writing stories so a person settles every conflict (one review per run)
+    conflict_review: bool = True
+
     # Observability
     otel_enabled: bool = True
     runs_dir: str = "runs"
@@ -195,6 +198,10 @@ class PipelineConfig:
         if few_shot_enabled is not None:
             env_values["few_shot_enabled"] = few_shot_enabled.lower() in ("true", "1", "yes")
 
+        conflict_review = os.environ.get("CONFLICT_REVIEW")
+        if conflict_review is not None:
+            env_values["conflict_review"] = conflict_review.lower() in ("true", "1", "yes")
+
         # Load config file overrides
         resolved_path = config_path or os.environ.get("BACKLOG_SYNTHESIZER_CONFIG")
         if resolved_path:
@@ -241,6 +248,7 @@ class PipelineConfig:
             "eval_f1_threshold",
             "eval_regression_threshold",
             "few_shot_enabled",
+            "conflict_review",
         }
 
         return {k: v for k, v in data.items() if k in valid_keys}

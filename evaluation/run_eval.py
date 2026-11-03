@@ -226,6 +226,9 @@ async def run_evaluation(
         EvalSummary with aggregate metrics.
     """
     entries = _load_golden_dataset(dataset_path)
+    # The eval measures detection with nobody at the keyboard, so conflicts are
+    # written as the gap report classifies them instead of pausing for review.
+    os.environ["CONFLICT_REVIEW"] = "false"
     graph = compile_graph()
 
     if verbose:

@@ -141,12 +141,11 @@ python -m pytest tests/
 # Run with verbose output
 python -m pytest tests/ -v
 
-# Run a specific test file
-python -m pytest tests/test_parser_node.py
-
-# Run with coverage threshold enforcement
-python -m pytest tests/ --cov-fail-under=65
+# Run a specific test file (add --no-cov, or the 70% coverage minimum fails a partial run)
+python -m pytest tests/test_parser_node.py --no-cov
 ```
+
+Every full run reports coverage and fails below 70% (set in `pyproject.toml`).
 
 Tests make no API calls: LLMs are mocked, and `tests/conftest.py` keeps the fallback on the single-call menu.
 

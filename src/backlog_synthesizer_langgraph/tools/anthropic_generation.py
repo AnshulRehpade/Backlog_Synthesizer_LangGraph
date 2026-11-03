@@ -115,8 +115,8 @@ class AnthropicGenerationTool:
 
         if system_prompt is not None:
             kwargs["system"] = system_prompt
-        # Accepted on API version 2023-06-01 (what this SDK sends). Version 2026-10-21
-        # rejects temperature, so drop this if the SDK is upgraded to a release using it.
+        # SDK 1.x removed this parameter (pyproject.toml pins anthropic<1.0); drop it
+        # if the SDK is upgraded.
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
 

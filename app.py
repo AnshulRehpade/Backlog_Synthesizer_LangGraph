@@ -526,6 +526,7 @@ if run_clicked and transcript_text.strip():
 
     if result is not None:
         st.session_state["result"] = result
+        paused = pending_review(result) is not None
 
         # Final progress update for any nodes the stream didn't catch
         parser_output = result.get("parser_output")
@@ -559,13 +560,19 @@ if run_clicked and transcript_text.strip():
                     label=f"✅ Story Writer — {story_count} stories",
                     state="complete",
                 )
+            elif paused:
+                step_story.update(label="⏸ Story Writer — waiting for review", state="complete")
             elif gap_output is not None:
                 step_story.update(label="❌ Story Writer — failed", state="error")
             else:
                 step_story.update(label="⬜ Story Writer — skipped", state="complete")
 
         step_output.update(
-            label=f"✅ Done — {elapsed:.1f}s total", state="complete"
+            label=(
+                f"⏸ Paused for human review — {elapsed:.1f}s so far" if paused
+                else f"✅ Done — {elapsed:.1f}s total"
+            ),
+            state="complete",
         )
 
 # ─── Section 5: Error/Warning Banners ────────────────────────────
@@ -573,8 +580,15 @@ if run_clicked and transcript_text.strip():
 if "result" in st.session_state and st.session_state["result"] is not None:
     result = st.session_state["result"]
     status = result.get("status", "unknown")
+    review = pending_review(result)
+    notes = result.get("react_notes") or []
+    rejected = bool(notes) and isinstance(notes[-1], dict) and notes[-1].get("action") == "reject"
 
-    if status == "partial_failure":
+    if review is not None:
+        pass  # the review panel below explains the paused state
+    elif rejected:
+        st.warning("Rejected in human review — no stories were written.")
+    elif status == "partial_failure":
         st.warning(
             "⚠️ Pipeline completed with warnings — partial results shown below"
         )
@@ -589,7 +603,6 @@ if "result" in st.session_state and st.session_state["result"] is not None:
                             f"[{err.get('node', '?')}] {err.get('message', 'unknown')}"
                         )
 
-    review = pending_review(result)
     if review is not None and "graph" in st.session_state:
         st.info("👤 Human review required — the run is paused until you decide")
         st.text(review.get("summary", ""))
@@ -787,5 +800,5 @@ if "result" in st.session_state and st.session_state["result"] is not None:
                             f"{err.get('message', '')}"
                         )
 
-    elif status not in ("permanent_failure",):
+    elif status not in ("permanent_failure",) and review is None and not rejected:
         st.info("No stories generated. Check the Audit Log for details.")

@@ -124,6 +124,7 @@ Each part of the pipeline has its own scored check against labeled data:
 | `evaluation/run_gap_eval.py` | Gap verdicts, conflicts caught, false alarms, ticket links, resolutions, and work grouping | `gap_labels.json` (20 items from the sample meeting) |
 | `evaluation/run_suggestion_eval.py` | The judge's suggested conflict resolutions | `conflict_suggestions.json` (7 real conflicts) |
 | `run_eval.py --fallback-mode agent\|menu` | The opt-in fallback agent vs. the single call | results in `agent_vs_menu.md` |
+| `evaluation/run_holdout_eval.py` | Full pipeline on 3 meetings never used for tuning: stories per piece of work, extra stories, ticket links, conflicts and resolutions; `--repo` runs an older checkout for before/after | `holdout/answer_key.json`, results in `holdout/RESULTS.md` |
 
 ```bash
 python evaluation/run_eval.py --verbose

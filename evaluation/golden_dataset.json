@@ -58,5 +58,177 @@
     "expected_duplicates": 0,
     "expected_conflicts": 1,
     "tags": ["performance", "export", "dashboard"]
+  },
+  {
+    "id": "eval-006",
+    "description": "Mostly duplicates with one genuinely new item (fallback should continue, not stop)",
+    "transcript": "Priya: We still need SSO login through Okta. Jake: And password reset by emailed link. Sarah: Two-factor authentication with authenticator apps. Priya: An audit log of admin actions. Jake: Invoices exported as PDF. Sarah: One new thing - customers keep asking for a dark mode on the dashboard.",
+    "existing_backlog": [
+      {
+        "id": "T-1",
+        "title": "SSO via Okta",
+        "description": "Users sign in with single sign-on through Okta",
+        "status": "open",
+        "tags": [
+          "auth"
+        ]
+      },
+      {
+        "id": "T-2",
+        "title": "Password reset email",
+        "description": "Users reset their password through a link sent by email",
+        "status": "open",
+        "tags": [
+          "auth"
+        ]
+      },
+      {
+        "id": "T-3",
+        "title": "Two-factor authentication",
+        "description": "Support 2FA using authenticator apps such as Google Authenticator",
+        "status": "open",
+        "tags": [
+          "auth",
+          "security"
+        ]
+      },
+      {
+        "id": "T-4",
+        "title": "Admin audit log",
+        "description": "Record every admin action in an audit log",
+        "status": "open",
+        "tags": [
+          "security"
+        ]
+      },
+      {
+        "id": "T-5",
+        "title": "PDF invoice export",
+        "description": "Customers can download invoices as PDF files",
+        "status": "open",
+        "tags": [
+          "billing"
+        ]
+      }
+    ],
+    "expected_stories_count": 1,
+    "expected_duplicates": 5,
+    "expected_conflicts": 0,
+    "tags": [
+      "fallback",
+      "mostly-duplicates"
+    ]
+  },
+  {
+    "id": "eval-007",
+    "description": "Conflict hidden behind a generic ticket: the specific limits live in a second ticket",
+    "transcript": "Sarah: SSO login through Okta is still a must. Jake: Password reset by emailed link too. Priya: And two-factor authentication with authenticator apps. Sarah: For CSV export of reports, it should run in the background and handle up to one million rows.",
+    "existing_backlog": [
+      {
+        "id": "T-1",
+        "title": "SSO via Okta",
+        "description": "Users sign in with single sign-on through Okta",
+        "status": "open",
+        "tags": [
+          "auth"
+        ]
+      },
+      {
+        "id": "T-2",
+        "title": "Password reset email",
+        "description": "Users reset their password through a link sent by email",
+        "status": "open",
+        "tags": [
+          "auth"
+        ]
+      },
+      {
+        "id": "T-3",
+        "title": "Two-factor authentication",
+        "description": "Support 2FA using authenticator apps such as Google Authenticator",
+        "status": "open",
+        "tags": [
+          "auth",
+          "security"
+        ]
+      },
+      {
+        "id": "T-4",
+        "title": "Report CSV export",
+        "description": "Users can export any report to a CSV file from the reports page",
+        "status": "open",
+        "tags": [
+          "export"
+        ]
+      },
+      {
+        "id": "T-5",
+        "title": "Export limits",
+        "description": "Report exports run synchronously in the request and are capped at 5,000 rows to protect the database",
+        "status": "open",
+        "tags": [
+          "export",
+          "performance"
+        ]
+      }
+    ],
+    "expected_stories_count": 1,
+    "expected_duplicates": 3,
+    "expected_conflicts": 1,
+    "tags": [
+      "fallback",
+      "conflict"
+    ]
+  },
+  {
+    "id": "eval-008",
+    "description": "Everything already exists, including done and in-progress tickets (restraint: change nothing)",
+    "transcript": "Jake: Recap - we need SSO login through Okta, password reset by emailed link, two-factor authentication with authenticator apps, and invoices exported as PDF.",
+    "existing_backlog": [
+      {
+        "id": "T-1",
+        "title": "SSO via Okta",
+        "description": "Users sign in with single sign-on through Okta",
+        "status": "done",
+        "tags": [
+          "auth"
+        ]
+      },
+      {
+        "id": "T-2",
+        "title": "Password reset email",
+        "description": "Users reset their password through a link sent by email",
+        "status": "in_progress",
+        "tags": [
+          "auth"
+        ]
+      },
+      {
+        "id": "T-3",
+        "title": "Two-factor authentication",
+        "description": "Support 2FA using authenticator apps such as Google Authenticator",
+        "status": "done",
+        "tags": [
+          "auth",
+          "security"
+        ]
+      },
+      {
+        "id": "T-4",
+        "title": "PDF invoice export",
+        "description": "Customers can download invoices as PDF files",
+        "status": "open",
+        "tags": [
+          "billing"
+        ]
+      }
+    ],
+    "expected_stories_count": 0,
+    "expected_duplicates": 4,
+    "expected_conflicts": 0,
+    "tags": [
+      "fallback",
+      "restraint"
+    ]
   }
 ]

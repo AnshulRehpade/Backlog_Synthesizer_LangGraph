@@ -181,3 +181,28 @@ async def test_end_to_end_agent_corrects_asks_human_then_stories_use_corrections
 
     assert final["status"] == "completed"
     assert seen_by_story_writer[0].total_duplicates == 8
+
+
+async def test_decision_note_records_origin_and_agent_stats(agent_mode):
+    result, _, _ = await _run_node(_state(), _outcome())
+    note = result["react_notes"][-1]
+    assert (note["from_step"], note["decided_by"]) == ("gap_detection", "agent")
+    assert note["agent"] == {"turns": 3, "tool_calls": 2, "tokens": 1234, "stopped_because": "finished"}
+
+
+def test_eval_summarizes_fallbacks_from_notes():
+    from evaluation.run_eval import _fallback_summary
+
+    notes = [
+        {"node": "parser", "note": "parsed"},
+        {"node": "llm_fallback_agent", "action": "agent_step", "note": "list_items() → ..."},
+        {"node": "llm_fallback", "action": "proceed_with_low_confidence", "from_step": "parser",
+         "decided_by": "agent", "agent": {"tokens": 10}},
+        {"node": "llm_fallback", "action": "return_nothing_new"},
+    ]
+    fallbacks, steps = _fallback_summary(notes)
+    assert fallbacks == [
+        {"from_step": "parser", "action": "proceed_with_low_confidence", "decided_by": "agent", "agent": {"tokens": 10}},
+        {"from_step": "?", "action": "return_nothing_new", "decided_by": "menu"},
+    ]
+    assert steps == ["list_items() → ..."]

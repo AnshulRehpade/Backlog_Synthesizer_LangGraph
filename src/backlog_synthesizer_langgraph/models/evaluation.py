@@ -35,6 +35,12 @@ class EvalRunResult(BaseModel):
     conflicts_found: int = 0
     passed: bool = True
     failure_reason: str | None = None
+    status: str = ""
+    duration_ms: int = 0
+    # LLM fallback behavior (empty when the run never reached the fallback)
+    fallbacks: list[dict] = Field(default_factory=list)
+    agent_steps: list[str] = Field(default_factory=list)
+    paused_for_review: bool = False
 
 
 class EvalSummary(BaseModel):

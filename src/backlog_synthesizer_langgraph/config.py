@@ -83,8 +83,9 @@ class PipelineConfig:
     # Few-shot prompting
     few_shot_enabled: bool = True
 
-    # LLM fallback: "agent" investigates with tools first; "menu" is the single-call picker
-    fallback_mode: str = "agent"
+    # LLM fallback: "menu" is the single-call picker; "agent" investigates with tools
+    # first (opt-in — see evaluation/agent_vs_menu.md for why it isn't the default)
+    fallback_mode: str = "menu"
 
     # Observability
     otel_enabled: bool = True

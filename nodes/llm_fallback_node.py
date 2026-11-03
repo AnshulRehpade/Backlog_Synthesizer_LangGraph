@@ -7,10 +7,11 @@ predefined set of actions.
 This node:
 1. Builds an observation summary from current state
 2. Defines available actions based on current_step
-3. Chooses an action. With FALLBACK_MODE=agent (the default), a bounded
-   tool-calling agent investigates first and may correct gap-detection labels
-   (agents/fallback_agent.py). If it can't run or reaches no decision, a single
-   LLM call picks from the menu, as with FALLBACK_MODE=menu.
+3. Chooses an action. By default (FALLBACK_MODE=menu) a single LLM call picks
+   from the menu. With FALLBACK_MODE=agent, a bounded tool-calling agent
+   investigates first and may correct gap-detection labels
+   (agents/fallback_agent.py); if it can't run or reaches no decision, the
+   menu call decides.
 4. Executes the chosen action (retry, return partial, or halt)
 5. Logs everything to audit log and records OTel span
 
@@ -294,6 +295,19 @@ async def _execute_fallback(
     # 7. Agent corrections and its tool calls go into state alongside the action.
     if agent_outcome is not None:
         _apply_agent_outcome(result, agent_outcome, decided_by)
+
+    # The decision note (always last) says where the fallback came from and who
+    # decided, so callers like the eval can report on fallback behavior.
+    decision_note = result["react_notes"][-1]
+    decision_note["from_step"] = current_step
+    decision_note["decided_by"] = decided_by
+    if agent_outcome is not None:
+        decision_note["agent"] = {
+            "turns": agent_outcome.turns,
+            "tool_calls": len(agent_outcome.steps),
+            "tokens": agent_outcome.tokens_used,
+            "stopped_because": agent_outcome.stopped_because,
+        }
 
     if span is not None:
         span.end()

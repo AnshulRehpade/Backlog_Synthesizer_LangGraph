@@ -3,7 +3,8 @@
 These functions implement the three-tier decision pattern:
     Level 1: Conditional edges (deterministic, zero cost)
     Level 2: LLM fallback (for unexpected situations)
-    Level 3: Human in the loop (for critical decisions — future)
+    Level 3: Human in the loop via interrupt(): human_review (when the fallback
+             asks for a person) and conflict_review (before every story_writer run)
 
 Routing logic lives here, never inside nodes.
 """
@@ -217,7 +218,9 @@ def route_after_story_writer(state: PipelineState) -> str:
     Level 2 — LLM fallback node handles unexpected situations
         (routed to via "llm_fallback_node" return value)
 
-    Level 3 — Human in the loop for critical decisions (future)
+    Level 3 — Human in the loop: the fallback's request_review action routes
+        to human_review, and conflicts are settled in conflict_review before
+        story_writer
 
     Args:
         state: The current PipelineState after story_writer_node.

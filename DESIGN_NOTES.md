@@ -35,9 +35,10 @@ The original version made a ReAct-style LLM call at every decision point, five p
 
 ## How I tested and evaluated it
 
-- **Tests:** 260 pytest tests across 17 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A 70% coverage minimum is enforced in `pyproject.toml` (currently about 80%). The original version had 554 tests at 81% coverage and cost about $0.009 per run.
+- **Tests:** 260 pytest tests across 17 files. They include unit tests for every node, full-pipeline integration tests, and end-to-end tests that pause a real compiled graph at human review and resume it with approve, reject or a new threshold. A 70% coverage minimum is enforced in `pyproject.toml` (currently about 80%). The original version ([backlog-synthesizer](https://github.com/AnshulRehpade/backlog-synthesizer)) had 554 tests at 81% coverage and cost about $0.009 per run.
 - **Evaluation harness** (`evaluation/run_eval.py`): runs the full graph against a golden dataset of 8 scenarios, each with expected story, duplicate and conflict counts. It reports the per-scenario result and the keyword overlap between the transcript and the generated stories (mean, min, max and standard deviation).
-- **Honest limitations:** five scenarios is a small set, and keyword overlap is only a rough proxy for story quality. My next step would be an LLM-as-judge rubric (completeness, faithfulness, acceptance-criteria quality) run as a LangSmith experiment over a larger dataset.
+- **Held-out test** (`evaluation/run_holdout_eval.py`): three meetings in domains the pipeline was never tuned on, with labels committed before any run, scored before and after the changes (`evaluation/holdout/RESULTS.md`).
+- **Honest limitations:** the sets are small (8 golden scenarios, 20 labeled items, 3 held-out meetings), and the held-out meetings and labels were written by the same AI assistant that built the changes; I reviewed and froze the labels before running, but a set written independently from real transcripts would be a stronger test. Keyword overlap is only a rough proxy for story quality, and the held-out scorer uses an LLM only to match stories to the answer key, not to grade them. My next step would be an LLM-as-judge rubric (completeness, faithfulness, acceptance-criteria quality) over a larger set of real transcripts.
 
 ## Demo
 

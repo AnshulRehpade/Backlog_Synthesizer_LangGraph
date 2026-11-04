@@ -354,7 +354,7 @@ Launch: `streamlit run app.py` → opens at http://localhost:8501
 - Checkpointer enables session state persistence and replay
 - CLI: `python main.py data/sample_transcript.txt [--backlog data/sample_backlog.json]`
 - UI: `streamlit run app.py` (sample transcript pre-filled, run immediately)
-- **119 tests passing, 69% coverage** (threshold: 65%)
+- **260 tests passing, ~80% coverage** (70% minimum enforced in `pyproject.toml`)
 - Pipeline runs end-to-end with sample data (requires valid `ANTHROPIC_API_KEY` for LLM calls)
 - Without API key: gracefully degrades through parser → llm_fallback → return_partial → END
 

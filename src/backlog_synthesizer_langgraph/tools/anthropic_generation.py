@@ -7,6 +7,7 @@ exceptions into interface-defined ToolError subtypes.
 from __future__ import annotations
 
 import os
+import threading
 
 import anthropic
 
@@ -22,6 +23,27 @@ _TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 529})
 
 # HTTP status codes classified as permanent (non-retryable)
 _PERMANENT_STATUS_CODES = frozenset({401, 403, 404})
+
+# Process-wide tally of real API usage, read by the Streamlit app to show
+# measured (not estimated) tokens per agent. Every request goes through _send.
+_usage_lock = threading.Lock()
+_usage = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+
+
+def usage_snapshot() -> dict:
+    """Return a copy of the token usage recorded so far in this process."""
+    with _usage_lock:
+        return dict(_usage)
+
+
+def _record_usage(response) -> None:
+    usage = getattr(response, "usage", None)
+    counts = [getattr(usage, key, 0) for key in ("input_tokens", "output_tokens")]
+    counts = [c if isinstance(c, int) else 0 for c in counts]
+    with _usage_lock:
+        _usage["input_tokens"] += counts[0]
+        _usage["output_tokens"] += counts[1]
+        _usage["calls"] += 1
 
 
 class AnthropicGenerationTool:
@@ -159,6 +181,12 @@ class AnthropicGenerationTool:
         return self._send(kwargs)
 
     def _send(self, kwargs: dict):
+        """Send one request and record its token usage for the app's stats."""
+        response = self._create(kwargs)
+        _record_usage(response)
+        return response
+
+    def _create(self, kwargs: dict):
         """Call messages.create, translating SDK exceptions into ToolError subtypes."""
         try:
             return self._client.messages.create(**kwargs)

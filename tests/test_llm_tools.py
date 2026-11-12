@@ -26,3 +26,17 @@ def test_temperature_omitted_by_default():
     tool, client = _anthropic_tool()
     tool.generate("hi")
     assert "temperature" not in client.messages.create.call_args.kwargs
+
+
+def test_usage_is_recorded_from_every_response():
+    from backlog_synthesizer_langgraph.tools.anthropic_generation import usage_snapshot
+
+    tool, client = _anthropic_tool()
+    client.messages.create.return_value.usage = MagicMock(input_tokens=120, output_tokens=30)
+    before = usage_snapshot()
+    tool.generate("hi")
+    tool.generate("again")
+    after = usage_snapshot()
+    assert after["input_tokens"] - before["input_tokens"] == 240
+    assert after["output_tokens"] - before["output_tokens"] == 60
+    assert after["calls"] - before["calls"] == 2

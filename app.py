@@ -28,6 +28,7 @@ import streamlit as st
 
 from graph.builder import compile_graph
 from graph.review import current_state, pending_review, resume_review, thread_config
+from backlog_synthesizer_langgraph.tools.anthropic_generation import usage_snapshot
 from backlog_synthesizer_langgraph.tools.exporters import link_text
 from graph.state import PipelineState
 from backlog_synthesizer_langgraph.models.inputs import (
@@ -50,9 +51,40 @@ st.set_page_config(
 SAMPLE_TRANSCRIPT_PATH = Path("data/sample_transcript.txt")
 SAMPLE_BACKLOG_PATH = Path("data/sample_backlog.json")
 
-# Anthropic Haiku pricing (per 1M tokens)
-_INPUT_COST_PER_M = 0.80  # $0.80 per 1M input tokens
-_OUTPUT_COST_PER_M = 4.00  # $4.00 per 1M output tokens
+# Claude Haiku 4.5 pricing (per 1M tokens)
+_INPUT_COST_PER_M = 1.00  # $1.00 per 1M input tokens
+_OUTPUT_COST_PER_M = 5.00  # $5.00 per 1M output tokens
+
+# Graph node -> agent name shown in Pipeline Stats
+_AGENT_LABELS = {
+    "parser": "Parser",
+    "gap_detection": "Gap Detection",
+    "conflict_review": "Gap Detection",
+    "story_writer": "Story Writer",
+    "llm_fallback_node": "LLM Fallback",
+}
+
+
+def _usage_start() -> None:
+    """Begin measuring API usage for a new run."""
+    st.session_state["usage"] = {"by_agent": {}, "seconds": 0.0}
+    st.session_state["usage_mark"] = usage_snapshot()
+
+
+def _usage_charge(agent: str) -> None:
+    """Add the API usage since the last mark to `agent`, then move the mark."""
+    usage = st.session_state.get("usage")
+    if usage is None:
+        return
+    now = usage_snapshot()
+    mark = st.session_state.get("usage_mark", now)
+    d_in = now["input_tokens"] - mark["input_tokens"]
+    d_out = now["output_tokens"] - mark["output_tokens"]
+    if d_in or d_out:
+        tally = usage["by_agent"].setdefault(agent, {"input_tokens": 0, "output_tokens": 0})
+        tally["input_tokens"] += d_in
+        tally["output_tokens"] += d_out
+    st.session_state["usage_mark"] = now
 
 
 # ─── Cost Calculation ─────────────────────────────────────────────
@@ -232,12 +264,12 @@ def _parse_backlog_json(content: str) -> list[BacklogTicket]:
 # ─── Section 1: Header ───────────────────────────────────────────
 
 st.title("Backlog Synthesizer")
-st.caption("Powered by LangGraph Multi-Agent Pipeline")
+st.caption("Meeting transcript + existing backlog → linked user stories")
 
 col1, col2, col3 = st.columns(3)
-col1.markdown("🤖 **4 AI Agents**")
+col1.markdown("🤖 **3 AI Agents**")
 col2.markdown("🔄 **LangGraph Orchestration**")
-col3.markdown("⚡ **ReAct + Human-in-Loop**")
+col3.markdown("👤 **Human Review for Conflicts**")
 
 st.divider()
 
@@ -371,15 +403,15 @@ if "result" not in st.session_state or st.session_state.get("result") is None:
         st.markdown("""
 ```mermaid
 graph LR
-    A[📄 Parser] -->|items| B[🔍 Gap Detection]
-    B -->|new + conflicts| C[✍️ Story Writer]
-    C -->|stories| D[✅ Done]
-    B -.->|all duplicates| E[🤖 LLM Fallback]
-    C -.->|quality issues| E
-    E -.->|retry| A
-    E -.->|retry| B
-    E -.->|retry| C
-    E -.->|needs human| F[👤 Human Review]
+    A[📄 Parser] -->|requirements| B[🔍 Gap Detection]
+    B -->|conflicts found| R[👤 Conflict Review]
+    B -->|no conflicts| C[✍️ Story Writer]
+    R -->|settled| C
+    C -->|linked stories| D[✅ Jira / GitHub]
+    A -.->|too few items| E["🤖 LLM Fallback: retry that step once, continue or stop"]
+    B -.->|mostly duplicates| E
+    C -.->|no or vague stories| E
+    E -.->|unsure| F[👤 Human Review]
 ```
         """)
 
@@ -391,13 +423,13 @@ graph LR
             st.caption("Extracts decisions, features, pain points from your transcript")
         with col_b:
             st.markdown("**2. Detect Gaps**")
-            st.caption("Compares against existing backlog — finds new items, duplicates, conflicts")
+            st.caption("Looks up similar tickets, then an AI judge labels each match: duplicate, related or conflict")
         with col_c:
-            st.markdown("**3. Write Stories**")
-            st.caption("Generates structured user stories with acceptance criteria and tags")
+            st.markdown("**3. Review Conflicts**")
+            st.caption("A person settles contradictions on one screen, each with a suggested fix")
         with col_d:
-            st.markdown("**4. Review**")
-            st.caption("Quality checks via LLM fallback, optional human-in-the-loop")
+            st.markdown("**4. Write Stories**")
+            st.caption("One story per piece of work, with acceptance criteria, linked to its ticket")
 
         st.divider()
 
@@ -464,6 +496,7 @@ if run_clicked and transcript_text.strip():
         """Callback for streaming: update UI as each node completes."""
         completed_nodes.add(node_name)
         node_timings[node_name] = time.time() - stream_start
+        _usage_charge(_AGENT_LABELS.get(node_name, "Other"))
 
         if node_name == "parser":
             parser_out = state_update.get("parser_output")
@@ -513,6 +546,7 @@ if run_clicked and transcript_text.strip():
     try:
         # Keep the graph so a run paused for human review can be resumed on a later rerun.
         st.session_state["graph"] = compile_graph()
+        _usage_start()
         result = asyncio.run(
             run_pipeline_streaming(
                 transcript_text, backlog_tickets, transcript_filename,
@@ -525,6 +559,9 @@ if run_clicked and transcript_text.strip():
         result = None
 
     elapsed = time.time() - start_time
+    _usage_charge("Other")
+    if "usage" in st.session_state:
+        st.session_state["usage"]["seconds"] += elapsed
 
     if result is not None:
         st.session_state["result"] = result
@@ -648,7 +685,12 @@ if "result" in st.session_state and st.session_state["result"] is not None:
         if decision is not None:
             graph = st.session_state["graph"]
             with st.spinner("Writing stories..."):
+                st.session_state["usage_mark"] = usage_snapshot()
+                resume_start = time.time()
                 asyncio.run(resume_review(graph, result["session_id"], decision))
+                _usage_charge("Story Writer")
+                if "usage" in st.session_state:
+                    st.session_state["usage"]["seconds"] += time.time() - resume_start
                 st.session_state["result"] = asyncio.run(
                     current_state(graph, result["session_id"])
                 )
@@ -673,7 +715,12 @@ if "result" in st.session_state and st.session_state["result"] is not None:
         if decision is not None:
             graph = st.session_state["graph"]
             with st.spinner("Resuming pipeline..."):
+                st.session_state["usage_mark"] = usage_snapshot()
+                resume_start = time.time()
                 asyncio.run(resume_review(graph, result["session_id"], decision))
+                _usage_charge("After human review")
+                if "usage" in st.session_state:
+                    st.session_state["usage"]["seconds"] += time.time() - resume_start
                 st.session_state["result"] = asyncio.run(
                     current_state(graph, result["session_id"])
                 )
@@ -721,21 +768,12 @@ if "result" in st.session_state and st.session_state["result"] is not None:
             total_epics = len(story_output.epics)
             duplicates = gap_output.total_duplicates if gap_output else 0
             conflicts = gap_output.total_conflicts if gap_output else 0
-            total_time_ms = result.get("total_duration_ms", 0)
 
-            # Compute token totals from metadata
-            parser_meta = (
-                parser_output.metadata if parser_output and hasattr(parser_output, "metadata") else {}
-            )
-            parser_input_tok = parser_meta.get("input_tokens", 0)
-            parser_output_tok = parser_meta.get("output_tokens", 0)
-
-            # Estimate story writer tokens (approx: ~150 input + ~120 output per story)
-            sw_input_tok = total_stories * 150
-            sw_output_tok = total_stories * 120
-
-            total_input_tokens = parser_input_tok + sw_input_tok
-            total_output_tokens = parser_output_tok + sw_output_tok
+            # Real token counts, measured from every API response during this run
+            usage = st.session_state.get("usage") or {"by_agent": {}, "seconds": 0.0}
+            by_agent = usage["by_agent"]
+            total_input_tokens = sum(a["input_tokens"] for a in by_agent.values())
+            total_output_tokens = sum(a["output_tokens"] for a in by_agent.values())
             total_cost = _estimate_cost(total_input_tokens, total_output_tokens)
 
             m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -743,8 +781,8 @@ if "result" in st.session_state and st.session_state["result"] is not None:
             m2.metric("Epics", total_epics)
             m3.metric("Duplicates", duplicates)
             m4.metric("Conflicts", conflicts)
-            m5.metric("Time", f"{total_time_ms / 1000:.1f}s")
-            m6.metric("Cost", f"${total_cost:.4f}")
+            m5.metric("Run time", f"{usage['seconds']:.1f}s", help="Excludes time spent waiting for review")
+            m6.metric("Cost", f"${total_cost:.4f}", help="Claude Haiku 4.5 list price")
 
             # Token summary
             st.subheader("Token Usage")
@@ -755,35 +793,27 @@ if "result" in st.session_state and st.session_state["result"] is not None:
 
             # Per-agent breakdown
             st.subheader("Per-Agent Breakdown")
+            st.caption("Measured from API responses. Embedding lookups run locally and cost nothing.")
 
+            items = {
+                "Parser": len(parser_output.items) if parser_output is not None else None,
+                "Gap Detection": len(gap_output.entries) if gap_output is not None else None,
+                "Story Writer": total_stories,
+            }
             agents_data = []
-            if parser_output is not None:
-                p_cost = _estimate_cost(parser_input_tok, parser_output_tok)
+            for agent, tally in by_agent.items():
                 agents_data.append({
-                    "Agent": "Parser",
-                    "Items": len(parser_output.items),
-                    "Input Tokens": parser_input_tok,
-                    "Output Tokens": parser_output_tok,
-                    "Cost ($)": f"{p_cost:.4f}",
+                    "Agent": agent,
+                    "Items": items.get(agent, "—"),
+                    "Input Tokens": tally["input_tokens"],
+                    "Output Tokens": tally["output_tokens"],
+                    "Cost ($)": f"{_estimate_cost(tally['input_tokens'], tally['output_tokens']):.4f}",
                 })
-            if gap_output is not None:
-                agents_data.append({
-                    "Agent": "Gap Detection",
-                    "Items": len(gap_output.entries),
-                    "Input Tokens": 0,
-                    "Output Tokens": 0,
-                    "Cost ($)": "0.0000",
-                })
-            sw_cost = _estimate_cost(sw_input_tok, sw_output_tok)
-            agents_data.append({
-                "Agent": "Story Writer",
-                "Items": total_stories,
-                "Input Tokens": sw_input_tok,
-                "Output Tokens": sw_output_tok,
-                "Cost ($)": f"{sw_cost:.4f}",
-            })
+            if not agents_data:
+                st.info("No API usage was recorded for this run.")
 
-            st.table(agents_data)
+            if agents_data:
+                st.table(agents_data)
 
         # Tab 3 — Export & Raw JSON
         with tab_json:
